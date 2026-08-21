@@ -2,10 +2,14 @@ name: Build Magisk module
 
 on:
   push:
+    branches:
+      - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -14,17 +18,13 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
-
-      - name: Install Android build tools
-        shell: bash
-        run: sdkmanager "build-tools;37.0.0" >/dev/null
 
       - name: Build and verify module
         shell: bash
@@ -39,3 +39,15 @@ jobs:
             dist/xiaomi17-bitperfect-v0.2.0-poc.zip.sha256
           if-no-files-found: error
           retention-days: 90
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/xiaomi17-bitperfect-v0.2.0-poc.zip#Magisk module" \
+            "dist/xiaomi17-bitperfect-v0.2.0-poc.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi 17 USB Bit Perfect v0.2.0 POC" \
+            --notes "Device-specific Android 17 USB 44.1 kHz Bit Perfect proof of concept. Tested on Xiaomi 17 with Topping G5. The installer validates the stock Qualcomm USB library hash and refuses unknown firmware. 352.8 kHz is traded for 44.1 kHz because the vendor ABI exposes seven usable sample-rate slots."

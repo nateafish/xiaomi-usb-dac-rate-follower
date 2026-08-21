@@ -34,13 +34,15 @@ If a player was already running when the module or DAC became active, stop it co
 
 ## GitHub build
 
-Every branch push, and every manual workflow dispatch, performs a clean build:
+Every push to `main`, every version tag, and every manual workflow dispatch performs a clean build:
 
 1. Compiles `daemon/BitPerfectDaemon.java`.
 2. Converts it to Android DEX using Android build-tools 37.
 3. Verifies the patched Qualcomm library SHA-256.
 4. Packages the Magisk module as `xiaomi17-bitperfect-v0.2.0-poc.zip`.
 5. Publishes the ZIP and checksum as a GitHub Actions artifact.
+
+Tags matching `v*` also publish the ZIP and checksum as permanent GitHub Release assets.
 
 The generated module is a proof of concept and is not automatically installed.
 

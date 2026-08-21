@@ -13,7 +13,12 @@ fi
 
 D8_BIN="$ANDROID_HOME/build-tools/37.0.0/d8"
 if [[ ! -x "$D8_BIN" ]]; then
-    sdkmanager "build-tools;37.0.0" >/dev/null
+    D8_BIN=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name d8 \
+        | sort -V | tail -n 1)
+fi
+if [[ -z "$D8_BIN" || ! -x "$D8_BIN" ]]; then
+    echo "No Android d8 executable found under $ANDROID_HOME/build-tools" >&2
+    exit 1
 fi
 
 BUILD_DIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/xiaomi17-bitperfect.XXXXXX")
