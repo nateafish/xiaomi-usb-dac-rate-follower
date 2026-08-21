@@ -1,0 +1,43 @@
+name: Build Magisk module
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android build tools
+        shell: bash
+        run: sdkmanager "build-tools;37.0.0" >/dev/null
+
+      - name: Build and verify module
+        shell: bash
+        run: bash scripts/build.sh
+
+      - name: Upload module artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaomi17-bitperfect-v0.2.0-poc
+          path: |
+            dist/xiaomi17-bitperfect-v0.2.0-poc.zip
+            dist/xiaomi17-bitperfect-v0.2.0-poc.zip.sha256
+          if-no-files-found: error
+          retention-days: 90

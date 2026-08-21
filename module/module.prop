@@ -1,0 +1,6 @@
+id=xiaomi17-bitperfect
+name=Xiaomi 17 USB Bit Perfect
+version=0.2.0-poc
+versionCode=4
+author=Codex research build
+description=Adds 44.1 kHz to the Qualcomm AIDL USB profile, enables Bit Perfect, and pre-arms Apple Music/NetEase Cloud Music.
