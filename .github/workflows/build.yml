@@ -2,8 +2,6 @@ name: Build Magisk module
 
 on:
   push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:

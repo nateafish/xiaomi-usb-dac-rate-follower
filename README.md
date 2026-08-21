@@ -34,7 +34,7 @@ If a player was already running when the module or DAC became active, stop it co
 
 ## GitHub build
 
-Every push to `main`, and every manual workflow dispatch, performs a clean build:
+Every branch push, and every manual workflow dispatch, performs a clean build:
 
 1. Compiles `daemon/BitPerfectDaemon.java`.
 2. Converts it to Android DEX using Android build-tools 37.
@@ -47,4 +47,3 @@ The generated module is a proof of concept and is not automatically installed.
 ## Research
 
 See [docs/research.md](docs/research.md) for the device evidence, HAL/AOSP paths, exact truncation mechanism, patch offsets, and reversible test results.
-
