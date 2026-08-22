@@ -1,6 +1,8 @@
-Xiaomi 17 USB Whitelist Rate Follower v0.3.0-alpha
+Xiaomi 17 USB Whitelist Rate Follower v0.3.1-alpha
 
-Default target: com.apple.android.music
+Default targets:
+  com.apple.android.music
+  com.netease.cloudmusic
 
 This build enables Xiaomi's built-in deep-buffer sample-rate manager and adds
 44.1 kHz to the normal mixer. It uses no Zygisk or app injection.

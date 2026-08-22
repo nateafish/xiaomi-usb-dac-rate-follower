@@ -27,10 +27,10 @@ jobs:
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomi17-bitperfect-v0.3.0-alpha
+          name: xiaomi17-bitperfect-v0.3.1-alpha
           path: |
-            dist/xiaomi17-bitperfect-v0.3.0-alpha.zip
-            dist/xiaomi17-bitperfect-v0.3.0-alpha.zip.sha256
+            dist/xiaomi17-bitperfect-v0.3.1-alpha.zip
+            dist/xiaomi17-bitperfect-v0.3.1-alpha.zip.sha256
           if-no-files-found: error
           retention-days: 90
 
@@ -41,7 +41,7 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/xiaomi17-bitperfect-v0.3.0-alpha.zip#Magisk and KernelSU module" \
-            "dist/xiaomi17-bitperfect-v0.3.0-alpha.zip.sha256#SHA-256 checksum" \
-            --title "Xiaomi 17 USB Whitelist Rate Follower v0.3.0 Alpha" \
-            --notes "Research archive: enables Xiaomi/AOSP Feature 8, adds a 44.1/48 kHz deep-buffer mixer profile, and gates source-rate following to Apple Music while a USB DAC is active. This release proves sample-rate following, not bit-perfect output."
+            "dist/xiaomi17-bitperfect-v0.3.1-alpha.zip#Magisk and KernelSU module" \
+            "dist/xiaomi17-bitperfect-v0.3.1-alpha.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi 17 USB Whitelist Rate Follower v0.3.1 Alpha" \
+            --notes "Research archive: enables Xiaomi/AOSP Feature 8, adds a 44.1/48 kHz deep-buffer mixer profile, and gates source-rate following to Apple Music and NetEase Cloud Music while a USB DAC is active. This release proves sample-rate following, not bit-perfect output."

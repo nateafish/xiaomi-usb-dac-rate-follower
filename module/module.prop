@@ -1,6 +1,6 @@
 id=xiaomi17-bitperfect
 name=Xiaomi 17 USB Whitelist Rate Follower
-version=0.3.0-alpha
-versionCode=7
+version=0.3.1-alpha
+versionCode=8
 author=nateafish
 description=Enables the built-in 44.1/48 kHz deep-buffer rate manager for selected USB audio apps. Experimental; not yet verified bit-perfect.

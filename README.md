@@ -3,13 +3,14 @@
 Device-specific Magisk/KernelSU research module for the Xiaomi 17 Android 17
 Qualcomm AIDL audio stack.
 
-Version `0.3.0-alpha` enables Xiaomi/AOSP's built-in deep-buffer sample-rate
+Version `0.3.1-alpha` enables Xiaomi/AOSP's built-in deep-buffer sample-rate
 manager, adds 44.1 kHz to the ordinary `deep_buffer_out` mixer, and activates
 source-rate following only while a whitelisted app is playing through a USB
-DAC. The default whitelist contains Apple Music:
+DAC. The default whitelist contains Apple Music and NetEase Cloud Music:
 
 ```text
 com.apple.android.music
+com.netease.cloudmusic
 ```
 
 Edit `config/packages.list` before installation to add more packages.

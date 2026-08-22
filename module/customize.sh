@@ -30,5 +30,5 @@ set_perm "$MODPATH/system/vendor/lib64/libdev_usb.so" 0 0 0644
 ui_print "- 44.1 kHz replaces 352.8 kHz in the seven-rate USB capability list"
 ui_print "- Includes self-contained KernelSU 4.x mounts when no metamodule exists"
 ui_print "- Enables Xiaomi's built-in deep-buffer rate manager (Feature 8)"
-ui_print "- Default whitelist: Apple Music"
+ui_print "- Default whitelist: Apple Music and NetEase Cloud Music"
 ui_print "- Alpha: sample-rate following is verified; bit-perfect is not"

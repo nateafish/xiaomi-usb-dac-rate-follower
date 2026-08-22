@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.3.0-alpha
+VERSION=0.3.1-alpha
 OUTPUT_NAME="xiaomi17-bitperfect-v${VERSION}.zip"
 PATCHED_LIB_SHA256=04cb4f2a7f4f4247995eb098b7d9a6ba8aeb6ff131144e87a6730d8a9ee4dad6
 HELPER_SHA256=e830886ad9f321d9893d58297e8560be6b2ccd74f1b7dfff2919c0baaa24f491
@@ -32,8 +32,9 @@ grep -q 'name="hifi_playback" role="source" flags="BIT_PERFECT"' \
     "$MODULE_STAGE/system/vendor/etc/audio/audio_module_config_primary.xml"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.3.0-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.3.1-alpha$' "$MODULE_STAGE/module.prop"
 grep -q '^com.apple.android.music$' "$MODULE_STAGE/config/packages.list"
+grep -q '^com.netease.cloudmusic$' "$MODULE_STAGE/config/packages.list"
 actual_helper_sha256=$(sha256sum "$MODULE_STAGE/bin/set-audio-parameters" | awk '{print $1}')
 if [[ "$actual_helper_sha256" != "$HELPER_SHA256" ]]; then
     echo "set-audio-parameters checksum mismatch: $actual_helper_sha256" >&2
