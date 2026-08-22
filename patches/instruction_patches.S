@@ -5,6 +5,14 @@ latest_max_patch:
     // mov w3, wzr: ProfileManager::initialize(..., LATEST_MAX = 0)
     .inst 0x2a1f03e3
 
+.section .profile_init_patch, "a"
+.p2align 2
+.global profile_init_patch
+profile_init_patch:
+    // nop the Feature 8 early exit at 0xc3260. This creates Xiaomi's existing
+    // deep_buffer_out profile without globally enabling the rest of Feature 8.
+    .inst 0xd503201f
+
 .section .effect_gate_patch, "a"
 .p2align 2
 .global effect_gate_patch

@@ -19,7 +19,7 @@ QTI AIDL HAL / PAL changes the USB backend
 AudioFlinger MixerThread must read back and adopt the HAL rate
 ```
 
-The v0.6.2 design repairs this existing chain. It does not create a second state
+The v0.6.3 design repairs this existing chain. It does not create a second state
 machine or repeatedly inspect playback from userspace.
 
 ## Where configuration lives
@@ -62,6 +62,12 @@ Reverse engineering of the exact system policy library found:
 
 The firmware property `ro.vendor.audio.hifi.config=13` enables Xiaomi features
 6, 7, and 9. Feature 7 is the important AudioFlinger Hifi synchronization path.
+
+Feature 6 constructs `HifiSampleRateManager`, but profile creation in
+`AudioPolicyManager::initialize()` has a second Feature 8 check. At file offset
+`0xc3260`, stock exits before calling `createHifiProfile("deep_buffer_out")`.
+v0.6.3 replaces only that early-exit instruction with a NOP. It does not change
+the property to 15 and does not globally enable Feature 8's effect handling.
 
 ### Why FIRST_LOCK fails gapless playback
 
@@ -123,7 +129,7 @@ and Feature 8 are enabled. This firmware initializes the manager through
 Feature 6 while its configuration leaves Feature 8 disabled, so Unknown can
 remain stale even though the selected USB effect is None.
 
-At exact file offset `0xd55b4`, v0.6.2 changes `b.eq` to unsigned `b.hs`.
+At exact file offset `0xd55b4`, v0.6.3 changes `b.eq` to unsigned `b.hs`.
 The branch now accepts both None=2 and Unknown=3, while still rejecting
 Dolby=0 and MiSound=1. Its target remains the original continuation at
 `0xd55e0`, which executes `isAppAllowed()`; only Apple Music and NetEase pass.
@@ -150,7 +156,7 @@ This preserves the seven-entry ABI and makes the framework/Hifi manager see
 ## Selective package handling
 
 The exported `HifiSampleRateManager::isAppAllowed(profile, app)` thunk has one
-direct internal implementation. v0.6.2 replaces that implementation with a
+direct internal implementation. v0.6.3 replaces that implementation with a
 196-byte PAC-compatible function that:
 
 - preserves the stock prologue and epilogue addresses for unwind compatibility;
@@ -191,6 +197,6 @@ feature gates and 48 kHz condition are vendor modifications.
 
 KernelSU 3+ delegates system overlays to one active metamodule. The test phone
 now uses official `meta-overlayfs 1.3.1`; `/data/adb/metamodule` points to it and
-its ext4 content image mounts successfully. v0.6.2 intentionally refuses a
+its ext4 content image mounts successfully. v0.6.3 intentionally refuses a
 KernelSU installation without an active metamodule and contains no custom bind
 fallback.

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.6.2-alpha
+VERSION=0.6.3-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -41,6 +41,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
     "$ROOT_DIR/patches/instruction_patches.S" -o "$BUILD_DIR/instruction_patches.o"
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .latest_max_patch="$BUILD_DIR/latest_max_patch.bin" \
+    --dump-section .profile_init_patch="$BUILD_DIR/profile_init_patch.bin" \
     --dump-section .effect_gate_patch="$BUILD_DIR/effect_gate_patch.bin" \
     --dump-section .flinger_sync_patch="$BUILD_DIR/flinger_sync_patch.bin" \
     --dump-section .usb_441_patch="$BUILD_DIR/usb_441_patch.bin" \
@@ -49,11 +50,13 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 
 [[ $(wc -c < "$BUILD_DIR/is_app_allowed_hook.bin") -eq 196 ]]
 [[ $(wc -c < "$BUILD_DIR/latest_max_patch.bin") -eq 4 ]]
+[[ $(wc -c < "$BUILD_DIR/profile_init_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/effect_gate_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/flinger_sync_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/usb_441_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/usb_3528_patch.bin") -eq 4 ]]
 [[ $(xxd -p "$BUILD_DIR/latest_max_patch.bin") == e3031f2a ]]
+[[ $(xxd -p "$BUILD_DIR/profile_init_patch.bin") == 1f2003d5 ]]
 [[ $(xxd -p "$BUILD_DIR/effect_gate_patch.bin") == 62010054 ]]
 [[ $(xxd -p "$BUILD_DIR/flinger_sync_patch.bin") == 6a000014 ]]
 [[ $(xxd -p "$BUILD_DIR/usb_441_patch.bin") == 44ac0000 ]]
@@ -68,16 +71,20 @@ mkdir -p "$MODULE_STAGE/patches" "$ROOT_DIR/dist"
 cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
 cp "$BUILD_DIR/is_app_allowed_hook.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/latest_max_patch.bin" "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR/profile_init_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/effect_gate_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/flinger_sync_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/usb_441_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/usb_3528_patch.bin" "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.6.2-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.6.3-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'POLICY_STOCK_SHA256=e0bd4444' "$MODULE_STAGE/customize.sh"
 grep -q 'FLINGER_STOCK_SHA256=d499d92e' "$MODULE_STAGE/customize.sh"
 grep -q 'USB_STOCK_SHA256=d36085db' "$MODULE_STAGE/customize.sh"
+grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
+grep -q 'AudioPolicyManager structural state' "$MODULE_STAGE/customize.sh"
+grep -q 'Refusing a partial or incompatible patch state' "$MODULE_STAGE/customize.sh"
 [[ ! -e "$MODULE_STAGE/post-fs-data.sh" ]]
 [[ ! -e "$MODULE_STAGE/service.sh" ]]
 [[ ! -e "$MODULE_STAGE/mount-audio.sh" ]]

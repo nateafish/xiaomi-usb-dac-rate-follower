@@ -1,6 +1,6 @@
 id=xiaomi-usb-dac-rate-follower
 name=Xiaomi USB DAC Rate Follower
-version=0.6.2-alpha
-versionCode=15
+version=0.6.3-alpha
+versionCode=16
 author=nateafish
-description=Firmware-pinned Xiaomi USB rate following for Apple Music and NetEase, including legacy NONE/UNKNOWN effect-state compatibility. No daemon, Zygisk, or XML. Experimental.
+description=Firmware-pinned Xiaomi USB rate following for Apple Music and NetEase, restoring the legacy deep-buffer profile initialization. No daemon, Zygisk, or XML. Experimental.

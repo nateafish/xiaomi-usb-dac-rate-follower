@@ -1,0 +1,48 @@
+name: Device / firmware port request
+description: Request a reviewed target manifest for another Android device or firmware.
+title: "[Port] <device> <firmware>"
+labels:
+  - port-request
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not install an existing build on an unlisted firmware. Remove unrelated personal log lines, and do not upload paid app APKs or music files.
+  - type: input
+    id: device
+    attributes:
+      label: Device and firmware
+      description: Include model, product device, Android version, and full build fingerprint.
+    validations:
+      required: true
+  - type: input
+    id: root
+    attributes:
+      label: Root and overlay solution
+      description: Magisk or KernelSU version, plus the active metamodule when applicable.
+    validations:
+      required: true
+  - type: input
+    id: dac
+    attributes:
+      label: USB DAC and observed behavior
+      description: DAC model, source rates tested, displayed rates, expected result, and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: archive
+    attributes:
+      label: Diagnostic archive link
+      description: |
+        Attach or link an archive containing the files listed in README: the three primary libraries, available QTI AIDL HAL files, audio policy/XML/VINTF/init files, properties, dumpsys output, ALSA USB descriptors, and a 44.1 -> 48 kHz playback logcat.
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I understand that each firmware needs a separately reviewed offset/signature manifest.
+          required: true
+        - label: I removed unrelated personal log data and did not attach copyrighted app or music content.
+          required: true

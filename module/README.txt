@@ -1,20 +1,23 @@
-Xiaomi USB DAC Rate Follower v0.6.2-alpha
+Xiaomi USB DAC Rate Follower v0.6.3-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
-Android 17. The installer verifies the build fingerprint and SHA-256 of both
-stock system libraries before making a systemless copy.
+Android 17. The installer verifies the build fingerprint, ELF architecture,
+semantic markers, instruction context, and consistent patch state before
+making a systemless copy. Whole-file hashes are reference identifiers only.
 
-The module changes five narrow parts of Xiaomi's existing native Hifi path:
+The module changes six narrow parts of Xiaomi's existing native Hifi path:
 
-1. HifiSampleRateManager allows only com.apple.android.music and
+1. Xiaomi's existing deep_buffer_out Hifi profile is initialized without
+   globally enabling Feature 8 or changing ro.vendor.audio.hifi.config.
+2. HifiSampleRateManager allows only com.apple.android.music and
    com.netease.cloudmusic.
-2. The profile strategy changes from FIRST_LOCK to LATEST_MAX so overlapping
+3. The profile strategy changes from FIRST_LOCK to LATEST_MAX so overlapping
    old/new song AudioTracks do not permanently pin the first song's rate.
-3. AudioFlinger synchronizes MixerThread from the HAL after every accepted
+4. AudioFlinger synchronizes MixerThread from the HAL after every accepted
    Hifi sampling_rate change, including 48 kHz -> 44.1 kHz and the reverse.
-4. Qualcomm PAL's fixed seven-rate priority list includes 44.1 kHz instead of
+5. Qualcomm PAL's fixed seven-rate priority list includes 44.1 kHz instead of
    352.8 kHz, matching the DAC's verified native 44.1 kHz capability.
-5. Xiaomi's deep-buffer guard accepts NONE(2) and stale UNKNOWN(3), while still
+6. Xiaomi's deep-buffer guard accepts NONE(2) and stale UNKNOWN(3), while still
    rejecting real Dolby(0) and MiSound(1). USB is declared `usb_device:none`,
    but Feature 8 does not propagate it into the Hifi manager's separate field.
 

@@ -33,7 +33,7 @@ Patched hashes:
 
 ```text
 libaudiopolicymanagerdefault.so
-5be0a369ec73ce27d531aa58de84b4cd292518dbdb92f9568d65340d853ba72a
+0e92c652c81fbfbc7e0e0ce9aa2f01f957df0c58b7c660df694d895c57fabaa4
 
 libaudioflinger.so
 66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
@@ -52,10 +52,10 @@ libdev_usb.so
 
 ## Phased test
 
-1. With the old module disabled, verify all three stock hashes and a working USB DAC.
-2. Install `v0.6.2-alpha`; the installer must report exact fingerprint/hash
-   acceptance and metamodule availability. Reboot normally.
-3. Before opening a player, verify all three patched hashes, confirm 44.1 kHz
+1. With the old module disabled, record all three reference hashes and verify a working USB DAC.
+2. Install `v0.6.3-alpha`; the installer must report matching ELF/semantic and
+   instruction-context checks plus metamodule availability. Reboot normally.
+3. Before opening a player, record all three resulting hashes, confirm 44.1 kHz
    appears in the USB dynamic profile, and confirm audioserver is stable.
 4. Open NetEase from a fresh process and play a known 44.1 kHz WAV. Verify the
    DAC, AudioFlinger MixerThread, HAL, and ALSA rates all become 44.1 kHz.
@@ -71,14 +71,15 @@ libdev_usb.so
 10. Test old/new song overlap, pause/resume, force-stop, USB unplug/replug, and
     a second app playing concurrently.
 
-The v0.6.2 policy hash is
-`5be0a369ec73ce27d531aa58de84b4cd292518dbdb92f9568d65340d853ba72a`.
-Its added four-byte patch changes the branch at file offset `0xd55b4`. A live
-v0.6.1 capture established the precondition: NetEase requested 44100 Hz,
-the USB profile advertised 44100 Hz, the USB MixerThread had zero effect
-chains, and the USB device mapping declared `none`. Reverse engineering then
-showed that the Hifi manager can retain its constructor default `UNKNOWN(3)`
-and reject the event before sending `sampling_rate=44100` to the HAL.
+The v0.6.3 policy hash is
+`0e92c652c81fbfbc7e0e0ce9aa2f01f957df0c58b7c660df694d895c57fabaa4`.
+Its profile-initialization patch changes the Feature 8 early exit at `0xc3260`
+to a NOP. The effect-state patch changes the branch at `0xd55b4`. A live
+v0.6.2 capture showed NetEase requesting 44100 Hz on USB, but there was no
+`deep_buffer_out` profile configuration, `onPlaybackStarted`, or hardware
+callback. Earlier Feature 8 traces proved that creating this profile activates
+the existing manager-to-HAL chain. The separate NONE/UNKNOWN patch handles the
+stale effect enum without globally enabling Feature 8.
 
 ## Pass criteria
 
