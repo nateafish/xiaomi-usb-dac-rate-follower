@@ -20,12 +20,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v5
 
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
       - name: Build and verify module
         shell: bash
         run: bash scripts/build.sh
@@ -33,10 +27,10 @@ jobs:
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomi17-bitperfect-v0.2.0-poc
+          name: xiaomi17-bitperfect-v0.3.0-alpha
           path: |
-            dist/xiaomi17-bitperfect-v0.2.0-poc.zip
-            dist/xiaomi17-bitperfect-v0.2.0-poc.zip.sha256
+            dist/xiaomi17-bitperfect-v0.3.0-alpha.zip
+            dist/xiaomi17-bitperfect-v0.3.0-alpha.zip.sha256
           if-no-files-found: error
           retention-days: 90
 
@@ -47,7 +41,7 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/xiaomi17-bitperfect-v0.2.0-poc.zip#Magisk module" \
-            "dist/xiaomi17-bitperfect-v0.2.0-poc.zip.sha256#SHA-256 checksum" \
-            --title "Xiaomi 17 USB Bit Perfect v0.2.0 POC" \
-            --notes "Device-specific Android 17 USB 44.1 kHz Bit Perfect proof of concept. Tested on Xiaomi 17 with Topping G5. The installer validates the stock Qualcomm USB library hash and refuses unknown firmware. 352.8 kHz is traded for 44.1 kHz because the vendor ABI exposes seven usable sample-rate slots."
+            "dist/xiaomi17-bitperfect-v0.3.0-alpha.zip#Magisk and KernelSU module" \
+            "dist/xiaomi17-bitperfect-v0.3.0-alpha.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi 17 USB Whitelist Rate Follower v0.3.0 Alpha" \
+            --notes "Research archive: enables Xiaomi/AOSP Feature 8, adds a 44.1/48 kHz deep-buffer mixer profile, and gates source-rate following to Apple Music while a USB DAC is active. This release proves sample-rate following, not bit-perfect output."

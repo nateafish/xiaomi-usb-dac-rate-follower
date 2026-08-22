@@ -177,3 +177,22 @@ Output flags: 0x100000 BIT_PERFECT
 - [QTI AIDL HAL：从 PAL 获取 USB 动态能力](https://github.com/sonyxperiadev/vendor-qcom-opensource-audio-hal-primary-hal-ar/blob/b071e74ead44a7aecee69969003b902632cd4ab3/hal/core/platform/Platform.cpp#L417-L480)
 - [QTI AIDL HAL：复制零终止采样率数组](https://github.com/sonyxperiadev/vendor-qcom-opensource-audio-hal-primary-hal-ar/blob/b071e74ead44a7aecee69969003b902632cd4ab3/hal/core/platform/PlatformUtils.cpp#L117-L123)
 - [Android：Preferred mixer attributes on USB devices](https://source.android.com/docs/core/audio/preferred-mixer-attr)
+# v0.3.0-alpha: built-in deep-buffer rate manager
+
+Reverse engineering found `FeatureManager::isFeatureEnable(8)` in
+`/system/lib64/libmediautils.so`. Feature 8 is controlled by bit `0x2` of
+`ro.vendor.audio.hifi.config`. Xiaomi ships the property as `13`; changing it
+to `15` before audioserver starts makes `AudioPolicyManager::initialize()`
+create the missing `deep_buffer_out` `HifiSampleRateManager` profile.
+
+The manager already receives the active package name and source sample rate.
+It uses a FIRST_LOCK strategy with 48 kHz as the default and can request a
+48-to-44.1 kHz hardware update. The update is skipped unless its internal
+`activeEffect` state is `none`. The alpha module therefore changes this state
+only while a whitelisted app has an active USB AudioFlinger track, then returns
+the manager to its default-48-kHz state when the app stops.
+
+Observed after setting `activeEffect=none`: AudioFlinger reopened the
+`deep_buffer_out` MIXER thread at 44100 Hz and Qualcomm PAL selected 44100 Hz.
+This does not prove that effect chains are detached or that samples are
+bit-identical, so the build is deliberately labeled a rate-follower alpha.

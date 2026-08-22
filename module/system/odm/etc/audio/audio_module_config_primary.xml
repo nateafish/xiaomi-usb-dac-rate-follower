@@ -13,8 +13,8 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
             <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_24_BIT" />
         </mixPort>
         <mixPort name="deep_buffer_out" role="source" flags="DEEP_BUFFER">
-            <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_24_BIT" />
-            <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_32_BIT" />
+            <profile samplingRates="44100 48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_24_BIT" />
+            <profile samplingRates="44100 48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_32_BIT" />
         </mixPort>
         <mixPort name="compress_offload_out" role="source" recommendedMuteDurationMs="190" flags="DIRECT COMPRESS_OFFLOAD NON_BLOCKING GAPLESS_OFFLOAD">
             <profile samplingRates="8000 11025 12000 16000 22050 24000 32000 44100 48000" channelLayouts="LAYOUT_STEREO LAYOUT_MONO" formatType="NON_PCM" encoding="audio/mpeg" />

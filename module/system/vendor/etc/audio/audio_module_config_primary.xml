@@ -19,10 +19,10 @@ SPDX-License-Identifier: BSD-3-Clause-Clear
             <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO_HAPTIC_A" formatType="PCM" pcmType="INT_16_BIT" />
         </mixPort>
         <mixPort name="deep_buffer_out" role="source" flags="DEEP_BUFFER" recommendedMuteDurationMs="300">
-            <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />
-            <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="FIXED_Q_8_24" />
-            <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_24_BIT" />
-            <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_32_BIT" />
+            <profile samplingRates="44100 48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />
+            <profile samplingRates="44100 48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="FIXED_Q_8_24" />
+            <profile samplingRates="44100 48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_24_BIT" />
+            <profile samplingRates="44100 48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_32_BIT" />
         </mixPort>
         <mixPort name="mmap_no_irq_out" role="source" flags="DIRECT MMAP_NOIRQ">
             <profile samplingRates="48000" channelLayouts="LAYOUT_STEREO" formatType="PCM" pcmType="INT_16_BIT" />

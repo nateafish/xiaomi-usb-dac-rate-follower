@@ -1,51 +1,54 @@
-# Xiaomi 17 USB 44.1 kHz Bit Perfect
+# Xiaomi 17 USB Whitelist Rate Follower
 
-Device-specific proof-of-concept Magisk/KernelSU module for the Xiaomi 17 Android 17 Qualcomm AIDL audio stack.
+Device-specific Magisk/KernelSU research module for the Xiaomi 17 Android 17
+Qualcomm AIDL audio stack.
 
-The connected Topping G5 reports 44.1 kHz, but Qualcomm PAL exposes only seven sample-rate entries and the stock priority table places 44.1 kHz eighth. This module swaps the priority positions of 44.1 and 352.8 kHz, enables the dynamic `hifi_playback` Bit Perfect mix port, and pre-arms Android preferred mixer attributes for Apple Music and NetEase Cloud Music.
-
-Tested result on Xiaomi 17 + Topping G5:
-
-```text
-Thread type: BIT_PERFECT
-Sample rate: 44100 Hz
-HAL format: PCM32
-Output device: USB_HEADSET
-```
-
-## Exposed USB rates
+Version `0.3.0-alpha` enables Xiaomi/AOSP's built-in deep-buffer sample-rate
+manager, adds 44.1 kHz to the ordinary `deep_buffer_out` mixer, and activates
+source-rate following only while a whitelisted app is playing through a USB
+DAC. The default whitelist contains Apple Music:
 
 ```text
-44.1 / 48 / 88.2 / 96 / 176.4 / 192 / 384 kHz
+com.apple.android.music
 ```
 
-The vendor ABI has seven usable rate slots plus one zero terminator, so 352.8 kHz is intentionally sacrificed.
+Edit `config/packages.list` before installation to add more packages.
 
-## Safety warning
+## What is verified
 
-This repository contains a firmware-specific patched `libdev_usb.so`. The installer verifies the source library SHA-256 and refuses installation on an unknown build. Do not bypass that check or install the ZIP on another device or firmware.
+- The USB DAC advertises 44.1 kHz and Qualcomm PAL accepts it.
+- `ro.vendor.audio.hifi.config=15` enables Feature 8 and creates the missing
+  `deep_buffer_out` HifiSampleRateManager profile.
+- The manager receives the active package and source sample rate.
+- With its effect gate set to `none`, AudioFlinger reopens a normal MIXER
+  thread at 44.1 kHz and PAL selects 44.1 kHz.
+- The manager's default rate is 48 kHz and it resets when the whitelist is idle.
 
-The module targets these packages and resolves their UIDs dynamically:
+## Important limitation
 
-- `com.netease.cloudmusic`
-- `com.apple.android.music`
+This build is not yet proven bit-perfect. It proves system-side sample-rate
+following, but it does not yet prove that Dolby/MiSound/session effect chains,
+software volume, and all processing are detached. The module name is retained
+for upgrade compatibility; the release title deliberately says Rate Follower.
 
-If a player was already running when the module or DAC became active, stop it completely and reopen it once. Android does not migrate an existing mixed AudioTrack to a BitPerfectThread.
+## Device lock
 
-## GitHub build
+The bundled `libdev_usb.so` patch is firmware-specific. Installation aborts
+unless `/vendor/lib64/libdev_usb.so` matches the known stock or patched SHA-256.
+The vendor ABI exposes seven usable USB rate slots, so 44.1 kHz replaces
+352.8 kHz; exposed rates are 44.1/48/88.2/96/176.4/192/384 kHz.
 
-Every push to `main`, every version tag, and every manual workflow dispatch performs a clean build:
+## KernelSU
 
-1. Compiles `daemon/BitPerfectDaemon.java`.
-2. Converts it to Android DEX using Android build-tools 37.
-3. Verifies the patched Qualcomm library SHA-256.
-4. Packages the Magisk module as `xiaomi17-bitperfect-v0.2.0-poc.zip`.
-5. Publishes the ZIP and checksum as a GitHub Actions artifact.
+KernelSU without a metamodule uses the included early bind-mount helper. It
+applies the correct SELinux labels before mounting vendor/odm audio XML files.
+No Zygisk or application injection is used.
 
-Tags matching `v*` also publish the ZIP and checksum as permanent GitHub Release assets.
+## Build
 
-The generated module is a proof of concept and is not automatically installed.
+```sh
+bash scripts/build.sh
+```
 
-## Research
-
-See [docs/research.md](docs/research.md) for the device evidence, HAL/AOSP paths, exact truncation mechanism, patch offsets, and reversible test results.
+Every push to `main` builds and verifies the ZIP. Tags matching `v*` also
+publish a GitHub Release. See `docs/research.md` for reverse-engineering notes.
