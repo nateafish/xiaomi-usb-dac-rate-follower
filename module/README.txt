@@ -1,20 +1,29 @@
-Xiaomi USB DAC Rate Follower v0.5.1-alpha
+Xiaomi USB DAC Rate Follower v0.6.0-alpha
 
-This build keeps the firmware-locked Qualcomm USB capability patch that puts
-44.1 kHz inside the vendor HAL's seven-rate list. It marks Xiaomi's existing
-dynamic hifi_playback port BIT_PERFECT and injects only Apple Music and NetEase
-Cloud Music through Zygisk.
+Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
+Android 17. The installer verifies the build fingerprint and SHA-256 of both
+stock system libraries before making a systemless copy.
 
-Immediately before a target app creates a PCM media AudioTrack, the module asks
-Android 17 for a PCM32 preferred USB mixer matching that track's actual sample
-rate and channel mask. Preference-only AudioAttributes omit the apps' DEEP_BUFFER
-flag so that Android can match the BIT_PERFECT hifi profile. The original
-AudioTrack and its buffers remain unchanged; AudioFlinger performs any required
-source-to-PCM32 conversion.
+The module changes three narrow parts of Xiaomi's existing native Hifi path:
 
-There is no polling daemon, system AudioPolicyManager binary patch, live audio
-service restart, or modification of ordinary apps' 48 kHz mixer. KernelSU users
-must provide Zygisk Next or another compatible Zygisk implementation.
+1. HifiSampleRateManager allows only com.apple.android.music and
+   com.netease.cloudmusic.
+2. The profile strategy changes from FIRST_LOCK to LATEST_MAX so overlapping
+   old/new song AudioTracks do not permanently pin the first song's rate.
+3. AudioFlinger synchronizes MixerThread from the HAL after every accepted
+   Hifi sampling_rate change, including 48 kHz -> 44.1 kHz and the reverse.
 
-EXPERIMENTAL: bit-perfect and 44.1 -> 48 -> 96 kHz transitions still require
-phased hardware verification. Keep a recovery path that can disable the module.
+The USB/HAL mixer remains PCM32. PCM16, PCM24, or Float submitted by an app is
+handled by normal AudioFlinger conversion. This build does not claim strict
+bit identity when the app, effects, volume, or format conversion changes data.
+
+There is no daemon, Zygisk injection, app patch, preferred-mixer writer, XML
+edit, vendor HAL replacement, polling, or live audioserver restart.
+
+KernelSU requires an active metamodule such as official meta-overlayfs. The
+module contains no manual bind-mount fallback. Magisk uses its standard
+systemless mount.
+
+EXPERIMENTAL: install only on the fingerprint accepted by customize.sh. Keep a
+KernelSU/Magisk recovery path available. A reboot is required to apply or
+remove the module.
