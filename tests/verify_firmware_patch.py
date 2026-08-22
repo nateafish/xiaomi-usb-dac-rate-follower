@@ -14,6 +14,7 @@ from pathlib import Path
 
 V064_SHA256 = "c3747853afee1ccf0734cf144e84190c4814b88ebe3ea57d2b6ec83c779015ab"
 V065_SHA256 = "9dcedf72cb0a682f507495f1f048fc89eec614d842412964d98ebcfd635e645b"
+V066_SHA256 = "d0e6427ed9109282bf873247414f111a11a07d72cc8e5a4077cef3118bc07ff5"
 
 V064_PATCHES = {
     "profile_init_patch.bin": 799_328,
@@ -28,6 +29,11 @@ V064_PATCHES = {
 V065_PATCHES = {
     "shared_arbiter_cave.bin": 801_064,
     "shared_arbiter_branch.bin": 874_428,
+}
+
+V066_PATCHES = {
+    "usb_output_gate_cave.bin": 801_504,
+    "usb_output_gate_branch.bin": 515_988,
 }
 
 
@@ -75,6 +81,14 @@ def main() -> None:
         "62faffb042140f9160008052e1031faa",
         "arbiter post-context",
     )
+    require_region(stock, 515_984, "5f2403d5", "sender gate pre-context")
+    require_region(stock, 515_988, "e20a0034", "stock sender gate instruction")
+    require_region(
+        stock,
+        515_992,
+        "3f2303d5ffc301d1fd7b04a9f65705a9",
+        "sender gate post-context",
+    )
     assert not any(stock[801_058:802_816]), "reserved executable cave is occupied"
 
     with zipfile.ZipFile(sys.argv[2]) as archive:
@@ -91,10 +105,21 @@ def main() -> None:
         assert not any(v065[801_058:801_064])
         assert not any(v065[801_064 + len(cave) : 802_816])
 
-        # Reapplying an exact patch is byte-idempotent.
-        assert apply(v065, V064_PATCHES | V065_PATCHES, archive) == v065
+        v066 = apply(v065, V066_PATCHES, archive)
+        assert sha256(v066) == V066_SHA256
+        assert v066[515_988:515_992].hex() == "d3160114"
+        gate = archive.read("patches/usb_output_gate_cave.bin")
+        assert len(gate) == 140
+        assert v066[801_504 : 801_504 + len(gate)] == gate
+        assert not any(v066[801_504 + len(gate) : 802_816])
 
-    print("firmware patch verification: stock -> v0.6.4 -> v0.6.5 passed")
+        # Reapplying an exact patch is byte-idempotent.
+        assert apply(v066, V064_PATCHES | V065_PATCHES | V066_PATCHES, archive) == v066
+
+    print(
+        "firmware patch verification: stock -> v0.6.4 -> v0.6.5 -> "
+        "v0.6.6 passed"
+    )
 
 
 if __name__ == "__main__":

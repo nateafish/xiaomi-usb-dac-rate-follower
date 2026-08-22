@@ -1,9 +1,10 @@
-Xiaomi USB DAC Rate Follower v0.6.5-alpha
+Xiaomi USB DAC Rate Follower v0.6.6-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
 Android 17. The installer verifies the build fingerprint, ELF architecture,
-semantic markers, instruction context, and consistent patch state before
-making a systemless copy. Whole-file hashes are reference identifiers only.
+semantic markers, instruction context, dependent AudioPolicyComponents object
+layouts, and consistent patch state before making a systemless copy. Whole-file
+hashes are reference identifiers only.
 
 The module reconnects Xiaomi's existing native Hifi path with narrow,
 firmware-pinned changes:
@@ -34,6 +35,10 @@ firmware-pinned changes:
 11. A 440-byte lock-local arbiter reads Xiaomi's existing HIFI and Deep active
    rate counters. Deep temporarily owns the shared USB backend; when it becomes
    idle, a still-active HIFI stream regains its rate. No new state is counted.
+12. A final sender-side gate resolves the exact output handle and permits the
+   sampling_rate parameter only when every currently routed device is USB.
+   Bluetooth, speaker, wired, mixed USB/Bluetooth, empty, and unknown routes
+   fail closed and remain under Android's stock policy.
 
 The USB/HAL mixer remains PCM32. PCM16, PCM24, or Float submitted by an app is
 handled by normal AudioFlinger conversion. This build does not claim strict

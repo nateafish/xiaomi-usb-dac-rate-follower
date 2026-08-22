@@ -19,14 +19,18 @@ so:
 | Other app takes audio | selected app 44.1 + normal app 48 | 48 kHz or a clean policy-defined rejection; never slowed audio |
 | Other app releases audio | normal app stops, selected app remains 44.1 | returns to 44.1 kHz |
 | Full stop | no media clients | clean stream close; next song can configure again |
+| Bluetooth only | selected app at 44.1/48/96 on Bluetooth | stock Bluetooth behavior and normal speed; no Xiaomi `sampling_rate` write to the Bluetooth output |
+| USB attached, Bluetooth selected | DAC attached but media routed to Bluetooth | same as Bluetooth only; attachment alone must not open the gate |
+| Mixed route | an output contains USB and any non-USB device | fail closed; no rate write |
 
 For every row, verify all three layers: AudioPolicy/Hifi manager event and
 count, QTI HAL standby/configure, and AudioFlinger MixerThread readback. A DAC
 display alone cannot distinguish a correct policy decision from a stale mixer
 or backend.
 
-The current v0.6.5 alpha adds lock-local arbitration for simultaneous HIFI and
-Deep Buffer streams. A successful cold start still does not prove this path:
+The current v0.6.6 alpha adds lock-local arbitration for simultaneous HIFI and
+Deep Buffer streams plus a fail-closed gate on the final HAL parameter sender.
+A successful cold start still does not prove these paths:
 the other-app takeover/release rows must show exactly one effective transition
 at each ownership boundary and no repeated HAL reopen loop.
 
@@ -66,7 +70,7 @@ Patched hashes:
 
 ```text
 libaudiopolicymanagerdefault.so
-9dcedf72cb0a682f507495f1f048fc89eec614d842412964d98ebcfd635e645b
+d0e6427ed9109282bf873247414f111a11a07d72cc8e5a4077cef3118bc07ff5
 
 libaudioflinger.so
 66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
@@ -87,17 +91,17 @@ libaudiocorehal.qti.so
 - Do not proceed to transitions until fresh-start 44.1 and 48 kHz each pass.
 
 Before installation, the private exact-firmware verifier must pass against the
-captured stock policy ELF. It checks both the archived v0.6.4 intermediate hash
-and the v0.6.5 arbiter patch, including byte-idempotent reapplication:
+captured stock policy ELF. It checks the archived v0.6.4 and v0.6.5
+intermediates, the v0.6.6 transport gate, and byte-idempotent reapplication:
 
 ```text
-firmware patch verification: stock -> v0.6.4 -> v0.6.5 passed
+firmware patch verification: stock -> v0.6.4 -> v0.6.5 -> v0.6.6 passed
 ```
 
 ## Phased test
 
 1. With the old module disabled, record all three reference hashes and verify a working USB DAC.
-2. Install `v0.6.5-alpha`; the installer must report matching ELF/semantic,
+2. Install `v0.6.6-alpha`; the installer must report matching ELF/semantic,
    XML structural state, instruction-context checks, and metamodule
    availability. Reboot normally.
 3. Before opening a player, record all resulting hashes, confirm 44.1 kHz
@@ -119,8 +123,12 @@ firmware patch verification: stock -> v0.6.4 -> v0.6.5 passed
    follow it.
 10. Test old/new song overlap, pause/resume, force-stop, USB unplug/replug, and
     a second app playing concurrently.
+11. Route the same files to Bluetooth with the DAC detached, then with the DAC
+    still attached. Require normal speed and verify no `sampling_rate` call is
+    issued for the Bluetooth output handle. Repeat USB → Bluetooth → USB.
 
-The v0.6.5 policy hash is
+The v0.6.6 policy hash is recorded by the exact-firmware verifier and release
+artifact. The v0.6.5 intermediate hash remains
 `9dcedf72cb0a682f507495f1f048fc89eec614d842412964d98ebcfd635e645b`.
 Its profile-initialization patch changes the Feature 8 early exit at `0xc3260`
 to a NOP. The effect-state patch changes the branch at `0xd55b4`. A live
@@ -128,7 +136,7 @@ v0.6.2 capture showed NetEase requesting 44100 Hz on USB, but there was no
 `deep_buffer_out` profile configuration, `onPlaybackStarted`, or hardware
 callback. Reverse engineering also found the USB-device callback that already
 tries to create `hifi_playback`; its static default rate is zero, so stock
-rejects it. v0.6.5 repairs that configuration and uses AOSP Preferred Mixer
+rejects it. v0.6.6 repairs that configuration and uses AOSP Preferred Mixer
 DEFAULT behavior only to route whitelist media onto HIFI. Xiaomi's own
 start/stop/rate-count callbacks remain the controller. The separate
 NONE/UNKNOWN patch handles the Deep fallback without globally enabling Feature
@@ -152,6 +160,8 @@ module dropped it. Either half alone is incomplete.
 - 48 ↔ 44.1 kHz never changes playback speed.
 - When no whitelisted track remains active, the output returns to Xiaomi's
   normal 48 kHz baseline.
+- Bluetooth remains normal-speed and receives no module-originated
+  `sampling_rate` parameter whether or not a USB DAC is also attached.
 
 ## Recovery
 

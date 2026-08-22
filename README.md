@@ -3,7 +3,7 @@
 Firmware-pinned Magisk/KernelSU research module for Xiaomi 17 Ultra (`nezha`),
 Android 17 / API 37, OS `4.0.0.15.XPACNXM`.
 
-Version `0.6.5-alpha` repairs Xiaomi's existing native Hifi sample-rate path
+Version `0.6.6-alpha` repairs Xiaomi's existing native Hifi sample-rate path
 instead of building a second controller around it. It contains no daemon,
 Zygisk hook, app modification, polling loop, or live audioserver restart. A
 small in-policy hook uses Android's existing Preferred Mixer API with DEFAULT
@@ -51,13 +51,17 @@ hardware traces:
   active AIDL ODM module declares both PCM24 and PCM32 deep-buffer profiles at
   48000 only. The AIDL HAL also triggers `standby()` for VOIP(8) and HIFI(13)
   rate changes, but omits DEEP_BUFFER_PLAYBACK(3).
+- `sendkeySamplingRateToAHal(output, rate)` forwards `sampling_rate` without
+  checking which devices are currently routed on that output. The earlier
+  playback-event filter excludes speaker in one path but not Bluetooth, so the
+  legacy manager can re-clock a Bluetooth output and change playback speed.
 
 These conditions match the observed baseline: rates above 48 kHz can
 work, while 44.1/48 kHz switching is probabilistic, stale, or speed-altering.
 
 ## The guarded patch set
 
-`0.6.5-alpha` changes only these firmware addresses and one XML node:
+`0.6.6-alpha` changes only these firmware addresses and one XML node:
 
 | Library / offset | Stock | Patched | Purpose |
 |---|---:|---:|---|
@@ -68,6 +72,7 @@ work, while 44.1/48 kHz switching is probabilistic, stale, or speed-altering.
 | same library `0xd42c4` | per-profile strategy load | restored if an older module changed it | Keep VoIP stock; Deep/HIFI strategy comes from each static configuration |
 | same library `0xd55b4` | `b.eq 0xd55e0` | `b.hs 0xd55e0` | Accept `NONE(2)` and stale `UNKNOWN(3)` while still rejecting Dolby/MiSound |
 | same library `0xd57bc`, cave `0xc3928..0xc3adf` | per-profile `changed` test | shared HIFI/Deep arbitration | Use Xiaomi's existing active-rate counters to control the single physical USB backend |
+| same library `0x7df94`, cave `0xc3ae0..0xc3b6b` | no routed-device check | branch to 140-byte USB-only gate | Resolve the exact output handle; permit the HAL parameter only when every routed device is USB |
 | `libaudioflinger.so` `0x1b0a84` | `b.hi 0x1b0c2c` | `b 0x1b0c2c` | Synchronize MixerThread for 44.1/48 kHz too |
 | `libdev_usb.so` `0x7160`, `0x717c` | 352.8 then 44.1 kHz | 44.1 then 352.8 kHz | Put 44.1 inside PAL's seven returned rates |
 | `libaudiocorehal.qti.so` `0x230894..0x2308a3` | Reopen usecases 8/13 | Reopen usecases 3/8/13 | Let an accepted Deep Buffer rate change run the HAL's existing standby/reconfigure path |
@@ -85,15 +90,22 @@ USB port/strategy. Repeated AudioTracks from the same UID reuse the existing
 different whitelist UID replaces ownership only when it actually requests an
 output. Non-whitelisted UIDs ignore the preference and retain normal routing.
 
+The transport check is deliberately placed at the final sender. It looks up
+the callback's exact `audio_io_handle_t` in `AudioPolicyManager::mOutputs`,
+then checks the current `DeviceVector`. Only `USB_ACCESSORY`, `USB_DEVICE`, and
+`USB_HEADSET` are accepted. Unknown/empty routes, Bluetooth, speaker, wired,
+and mixed USB/Bluetooth routes fail closed without sending `sampling_rate`.
+Merely having a USB DAC attached is not sufficient.
+
 The `LATEST_MAX` strategy makes overlapping tracks deterministic: a new higher
 rate takes effect immediately; a new lower rate takes effect after the old
 higher-rate track stops. There is no timer or usage polling.
 
-### Alpha limitation: on-device arbitration validation
+### Alpha limitation: on-device arbitration and transport validation
 
-The v0.6.5 patch set has passed offline binary/signature checks, six named
-scenarios, and 24,402 balanced event traces, but has not yet passed the complete
-on-device transition matrix.
+The v0.6.6 patch set has passed offline binary/signature checks, six named USB
+scenarios, four non-USB fail-closed scenarios, and 24,402 balanced event
+traces, but has not yet passed the complete on-device transition matrix.
 It replaces Xiaomi's final per-profile decision with a lock-local shared
 backend arbiter: HIFI and Deep retain independent native counters; active Deep
 temporarily wins; stopping the final Deep track restores the still-active HIFI
@@ -119,6 +131,8 @@ The ZIP does not redistribute Xiaomi system/vendor libraries. During installatio
 1. requires the exact fingerprint documented above;
 2. validates ELF64/AArch64 headers, minimum sizes, semantic markers, stable
    instruction context, and a consistent known/patch state at every offset;
+   it also verifies the unmodified AudioPolicyComponents layouts used to map
+   output handles to their current device types;
 3. validates the active ODM XML as a stock or already-patched deep-buffer node;
 4. copies the targets into the module's systemless overlay;
 5. verifies the executable cave is completely empty (or exactly matches this
@@ -138,13 +152,13 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 ```
 
 The public build runs the shared-rate model automatically. With a privately
-captured stock policy library, the exact stock → v0.6.4 → v0.6.5 binary
+captured stock policy library, the exact stock → v0.6.4 → v0.6.5 → v0.6.6 binary
 transition can also be checked without installing anything:
 
 ```sh
 python3 tests/verify_firmware_patch.py \
   /path/to/libaudiopolicymanagerdefault.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.6.5-alpha.zip
+  dist/xiaomi-usb-dac-rate-follower-v0.6.6-alpha.zip
 ```
 
 Every push to `main` builds and verifies the module. A `v*` tag publishes a
@@ -161,6 +175,7 @@ device. Do not attach paid application APKs or music files.
   SDK version, product device, board platform, `ro.vendor.audio.hifi.config`,
   root solution/version, and active KernelSU metamodule if applicable.
 - `/system/lib64/libaudiopolicymanagerdefault.so`
+- `/system/lib64/libaudiopolicycomponents.so`
 - `/system/lib64/libaudioflinger.so`
 - `/vendor/lib64/libdev_usb.so`
 - `/vendor/bin/hw/audiohalservice.qti` and

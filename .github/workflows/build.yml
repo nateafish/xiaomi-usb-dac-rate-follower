@@ -32,10 +32,10 @@ jobs:
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomi-usb-dac-rate-follower-v0.6.5-alpha
+          name: xiaomi-usb-dac-rate-follower-v0.6.6-alpha
           path: |
-            dist/xiaomi-usb-dac-rate-follower-v0.6.5-alpha.zip
-            dist/xiaomi-usb-dac-rate-follower-v0.6.5-alpha.zip.sha256
+            dist/xiaomi-usb-dac-rate-follower-v0.6.6-alpha.zip
+            dist/xiaomi-usb-dac-rate-follower-v0.6.6-alpha.zip.sha256
           if-no-files-found: error
           retention-days: 90
 
@@ -46,8 +46,8 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/xiaomi-usb-dac-rate-follower-v0.6.5-alpha.zip#Magisk and KernelSU module" \
-            "dist/xiaomi-usb-dac-rate-follower-v0.6.5-alpha.zip.sha256#SHA-256 checksum" \
-            --title "Xiaomi USB DAC Rate Follower v0.6.5 Alpha" \
+            "dist/xiaomi-usb-dac-rate-follower-v0.6.6-alpha.zip#Magisk and KernelSU module" \
+            "dist/xiaomi-usb-dac-rate-follower-v0.6.6-alpha.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi USB DAC Rate Follower v0.6.6 Alpha" \
             --prerelease \
-            --notes "Exact-firmware experimental build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM. It repairs Xiaomi's dormant USB hifi_playback configuration and selects it for Apple Music/NetEase through Preferred Mixer DEFAULT behavior. A lock-local native arbiter coordinates HIFI and Deep Buffer over the shared USB backend, with no added persistent counters. Deep Buffer retains AIDL XML/HAL 44.1/48 support. No BIT_PERFECT flag, daemon, Zygisk, polling, or live audio restart. KernelSU requires a metamodule. Hardware transition testing is still required."
+            --notes "Exact-firmware experimental build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM. It repairs Xiaomi's dormant USB hifi_playback configuration and selects it for Apple Music/NetEase through Preferred Mixer DEFAULT behavior. A lock-local native arbiter coordinates HIFI and Deep Buffer over the shared USB backend. A final fail-closed gate permits sampling_rate writes only when the exact target output is routed exclusively to USB; Bluetooth and mixed routes remain under stock Android policy. Deep Buffer retains AIDL XML/HAL 44.1/48 support. No BIT_PERFECT flag, daemon, Zygisk, polling, or live audio restart. KernelSU requires a metamodule. Hardware transition testing is still required."

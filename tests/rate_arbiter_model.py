@@ -63,12 +63,15 @@ class HookDecisionModel:
     deep: Counter[int] = field(default_factory=Counter)
     hardware_rate: int = DEFAULT_RATE
     writes: list[int] = field(default_factory=list)
+    blocked_writes: list[tuple[str, int]] = field(default_factory=list)
 
     @staticmethod
     def _maximum(counter: Counter[int]) -> int:
         return max(counter, default=DEFAULT_RATE)
 
-    def event(self, profile: str, rate: int, starting: bool) -> int:
+    def event(
+        self, profile: str, rate: int, starting: bool, transport: str = "usb"
+    ) -> int:
         counter = self.hifi if profile == "hifi_playback" else self.deep
         old_local = self._maximum(counter)
         NativeUsbArbiter._update(counter, rate, starting)
@@ -101,9 +104,14 @@ class HookDecisionModel:
             elif starting and htotal == 1:
                 call = dmax != DEFAULT_RATE
 
-        if call:
+        # v0.6.6's final sender gate fails closed unless every device routed on
+        # the exact output handle is USB. State may still be observed by the
+        # vendor manager, but Bluetooth and mixed routes receive no parameter.
+        if call and transport == "usb":
             self.hardware_rate = desired
             self.writes.append(desired)
+        elif call:
+            self.blocked_writes.append((transport, desired))
         return self.hardware_rate
 
 
@@ -187,6 +195,19 @@ def main() -> None:
         [44_100, 48_000],
     )
 
+    # The sender-side safety boundary is tied to the target output, not merely
+    # to USB attachment. Bluetooth and a mixed USB/Bluetooth route must never
+    # receive Xiaomi's sampling_rate parameter, even for an allowed package.
+    for transport in ("bluetooth", "speaker", "wired", "mixed_usb_bt"):
+        gated = HookDecisionModel()
+        assert gated.event("hifi_playback", 44_100, True, transport) == 48_000
+        assert gated.event("hifi_playback", 44_100, False, transport) == 48_000
+        assert gated.writes == []
+        assert gated.blocked_writes == [
+            (transport, 44_100),
+            (transport, 48_000),
+        ]
+
     # Exhaustively compare the event-local hook against the ideal state model
     # across short balanced sequences. This catches missed first/last ownership
     # boundaries and unnecessary same-rate writes before any device install.
@@ -212,7 +233,10 @@ def main() -> None:
                 raise
             checked += 1
 
-    print(f"rate arbiter model: 6 scenarios and {checked} balanced traces passed")
+    print(
+        "rate arbiter model: 6 USB scenarios, 4 non-USB fail-closed "
+        f"scenarios, and {checked} balanced traces passed"
+    )
 
 
 if __name__ == "__main__":

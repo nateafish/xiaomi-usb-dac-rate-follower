@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.6.5-alpha
+VERSION=0.6.6-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -71,6 +71,19 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
     "$BUILD_DIR/shared_usb_arbiter.elf"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
+    "$ROOT_DIR/patches/usb_output_gate.S" -o "$BUILD_DIR/usb_output_gate.o"
+"$LLVM_BIN/ld.lld" --entry=usb_output_gate \
+    --section-start=.usb_output_gate_branch=0x7df94 \
+    --section-start=.usb_output_gate_cave=0xc3ae0 \
+    --defsym=SENDKEY_BODY=0x7df98 \
+    --defsym=SENDKEY_ZERO_PATH=0x7e0f0 \
+    "$BUILD_DIR/usb_output_gate.o" -o "$BUILD_DIR/usb_output_gate.elf"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .usb_output_gate_branch="$BUILD_DIR/usb_output_gate_branch.bin" \
+    --dump-section .usb_output_gate_cave="$BUILD_DIR/usb_output_gate_cave.bin" \
+    "$BUILD_DIR/usb_output_gate.elf"
+
+"$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/instruction_patches.S" -o "$BUILD_DIR/instruction_patches.o"
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .strategy_restore_patch="$BUILD_DIR/strategy_restore_patch.bin" \
@@ -88,6 +101,8 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 [[ $(wc -c < "$BUILD_DIR/preferred_hifi_cave.bin") -eq 374 ]]
 [[ $(wc -c < "$BUILD_DIR/shared_arbiter_branch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/shared_arbiter_cave.bin") -eq 440 ]]
+[[ $(wc -c < "$BUILD_DIR/usb_output_gate_branch.bin") -eq 4 ]]
+[[ $(wc -c < "$BUILD_DIR/usb_output_gate_cave.bin") -eq 140 ]]
 [[ $(wc -c < "$BUILD_DIR/strategy_restore_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/profile_init_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/effect_gate_patch.bin") -eq 4 ]]
@@ -99,6 +114,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 [[ $(xxd -p "$BUILD_DIR/hifi_config_branch.bin") == eb2b0214 ]]
 [[ $(xxd -p "$BUILD_DIR/preferred_hifi_branch.bin") == 19b80114 ]]
 [[ $(xxd -p "$BUILD_DIR/shared_arbiter_branch.bin") == 5bb8ff17 ]]
+[[ $(xxd -p "$BUILD_DIR/usb_output_gate_branch.bin") == d3160114 ]]
 [[ $(xxd -p "$BUILD_DIR/profile_init_patch.bin") == 1f2003d5 ]]
 [[ $(xxd -p "$BUILD_DIR/effect_gate_patch.bin") == 62010054 ]]
 [[ $(xxd -p "$BUILD_DIR/flinger_sync_patch.bin") == 6a000014 ]]
@@ -110,6 +126,8 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/preferred_hifi_hook.elf" \
     | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/shared_usb_arbiter.elf" \
+    | grep -q 'There are no relocations'
+"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate.elf" \
     | grep -q 'There are no relocations'
 grep -a -q 'hifi_playback' "$BUILD_DIR/shared_arbiter_cave.bin"
 grep -a -q 'deep_buffer_out' "$BUILD_DIR/shared_arbiter_cave.bin"
@@ -129,6 +147,8 @@ cp "$BUILD_DIR/preferred_hifi_branch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/preferred_hifi_cave.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/shared_arbiter_branch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/shared_arbiter_cave.bin" "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR/usb_output_gate_branch.bin" "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR/usb_output_gate_cave.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/strategy_restore_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/profile_init_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/effect_gate_patch.bin" "$MODULE_STAGE/patches/"
@@ -138,8 +158,9 @@ cp "$BUILD_DIR/usb_441_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/usb_3528_patch.bin" "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.6.5-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.6.6-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'POLICY_STOCK_SHA256=e0bd4444' "$MODULE_STAGE/customize.sh"
+grep -q 'COMPONENTS_STOCK_SHA256=2a0f70e0' "$MODULE_STAGE/customize.sh"
 grep -q 'FLINGER_STOCK_SHA256=d499d92e' "$MODULE_STAGE/customize.sh"
 grep -q 'USB_STOCK_SHA256=d36085db' "$MODULE_STAGE/customize.sh"
 grep -q 'PRIMARY_XML_STOCK_SHA256=369b5a59' "$MODULE_STAGE/customize.sh"
@@ -147,6 +168,8 @@ grep -q 'patch_primary_xml' "$MODULE_STAGE/customize.sh"
 grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
 grep -q 'AudioPolicyManager structural state' "$MODULE_STAGE/customize.sh"
 grep -q 'Refusing a partial or incompatible patch state' "$MODULE_STAGE/customize.sh"
+grep -q 'USB-only sampling-rate sender gate' "$MODULE_STAGE/customize.sh"
+grep -q 'mixed routes fail closed' "$MODULE_STAGE/customize.sh"
 [[ ! -e "$MODULE_STAGE/post-fs-data.sh" ]]
 [[ ! -e "$MODULE_STAGE/service.sh" ]]
 [[ ! -e "$MODULE_STAGE/mount-audio.sh" ]]

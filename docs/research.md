@@ -368,11 +368,36 @@ tracks to produce no redundant HAL writes.
 
 The binary exposes enough existing state to implement this without a daemon:
 each `ProfileManager` owns its active-rate count tree and current maximum, and
-the hardware callback already centralizes `sampling_rate=<rate>`. The remaining
-v0.6.5 hooks that callback decision at `0xd57bc`. Its 440-byte cave routine
+the hardware callback already centralizes `sampling_rate=<rate>`. The v0.6.6
+hook at `0xd57bc` replaces that callback decision. Its 440-byte cave routine
 looks up both profiles under the manager's existing shared lock, summarizes
 their native count maps, and forces reevaluation only on a local maximum change
 or a first/last cross-profile ownership boundary.
+
+## Why Bluetooth needs a final sender-side gate
+
+Xiaomi's `handlePlaybackEvent()` checks the manager's current-device set for
+speaker in one branch, but does not exclude Bluetooth. The centralized
+`AudioPolicyManager::sendkeySamplingRateToAHal(output, rate)` callback then
+constructs `sampling_rate=<rate>` and calls `setParameters()` on the supplied
+output handle without any routed-device check. This explains the observed
+Bluetooth speed change: package selection and rate counting can reach the same
+vendor callback after the destination is no longer USB.
+
+v0.6.6 branches from `sendkeySamplingRateToAHal()+4` into a 140-byte,
+allocation-free gate. It resolves the exact output handle through
+`AudioPolicyManager::mOutputs`, reads that descriptor's current `DeviceVector`,
+and accepts only `AUDIO_DEVICE_OUT_USB_ACCESSORY`, `_USB_DEVICE`, and
+`_USB_HEADSET`. Every listed device must be USB. Bluetooth, speaker, wired,
+mixed, empty, null, and unknown routes return before the original function
+signs its stack or calls the HAL; the accepted path resumes at the original
+`paciasp` instruction.
+
+This is stricter than checking whether any USB DAC is attached and fails
+closed if an internal object layout cannot be resolved. The installer verifies
+the exact output-collection item stride, `SwAudioOutputDescriptor` current-
+device offset, and `DeviceDescriptor` type offset in
+`libaudiopolicycomponents.so` before installing the policy patch.
 
 The strongest evidence for this build is the exact on-device binary and live
 HAL trace; AOSP explains the surrounding standard behavior, while the Xiaomi
@@ -382,6 +407,6 @@ feature gates and 48 kHz condition are vendor modifications.
 
 KernelSU 3+ delegates system overlays to one active metamodule. The test phone
 now uses official `meta-overlayfs 1.3.1`; `/data/adb/metamodule` points to it and
-its ext4 content image mounts successfully. v0.6.5 intentionally refuses a
+its ext4 content image mounts successfully. v0.6.6 intentionally refuses a
 KernelSU installation without an active metamodule and contains no custom bind
 fallback.

@@ -6,7 +6,9 @@ POLICY_PREVIOUS_SHA256=44d6d59dd395c2a5dfee6d3cf2c2f1a485377633a9e6d3b78754cc2b1
 POLICY_INTERIM_SHA256=34916265a7375e87db57125e3e603702a07335aed5f320ad61c58fa9c757b1b6
 POLICY_V062_SHA256=5be0a369ec73ce27d531aa58de84b4cd292518dbdb92f9568d65340d853ba72a
 POLICY_V064_SHA256=c3747853afee1ccf0734cf144e84190c4814b88ebe3ea57d2b6ec83c779015ab
-POLICY_PATCHED_SHA256=9dcedf72cb0a682f507495f1f048fc89eec614d842412964d98ebcfd635e645b
+POLICY_V065_SHA256=9dcedf72cb0a682f507495f1f048fc89eec614d842412964d98ebcfd635e645b
+POLICY_PATCHED_SHA256=d0e6427ed9109282bf873247414f111a11a07d72cc8e5a4077cef3118bc07ff5
+COMPONENTS_STOCK_SHA256=2a0f70e077bb0aa423a2b78d995ae34dcd0174a4230c2102873bbb53f6be01bc
 FLINGER_STOCK_SHA256=d499d92e115dac7ee8e7e5dcbd53079e6a61ffccbe6d34481f239813e1f3695f
 FLINGER_PATCHED_SHA256=66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
 USB_STOCK_SHA256=d36085dbf0e4f7979ee6b94540b216d949d0f74ab0cda385fdfd5cfc8cd0c296
@@ -15,11 +17,13 @@ HAL_STOCK_SHA256=388afd93534a81747a874f70fac2577e737db998c42dec6c02d109073335d29
 HAL_PATCHED_SHA256=3d21f137b48d18eaec31b7958820940110b74d65b900a57d3e80b9b464b4fa78
 PRIMARY_XML_STOCK_SHA256=369b5a595837d78ee6d7f1ad7042129421d9cdc3ea27b1c229e8476a54c9f151
 POLICY_MIN_SIZE=873924
+COMPONENTS_MIN_SIZE=739584
 FLINGER_MIN_SIZE=1772180
 USB_MIN_SIZE=29056
 HAL_MIN_SIZE=2918696
 PRIMARY_XML_MIN_SIZE=28653
 POLICY_SOURCE=/system/lib64/libaudiopolicymanagerdefault.so
+COMPONENTS_SOURCE=/system/lib64/libaudiopolicycomponents.so
 FLINGER_SOURCE=/system/lib64/libaudioflinger.so
 USB_SOURCE=/vendor/lib64/libdev_usb.so
 HAL_SOURCE=/vendor/lib64/hw/libaudiocorehal.qti.so
@@ -134,7 +138,7 @@ report_known_hash() {
     label=$2
     actual=$(sha_of "$file")
     case "$actual" in
-        "$POLICY_STOCK_SHA256"|"$POLICY_PREVIOUS_SHA256"|"$POLICY_INTERIM_SHA256"|"$POLICY_V062_SHA256"|"$POLICY_V064_SHA256"|"$POLICY_PATCHED_SHA256"|"$FLINGER_STOCK_SHA256"|"$FLINGER_PATCHED_SHA256"|"$USB_STOCK_SHA256"|"$USB_PATCHED_SHA256"|"$HAL_STOCK_SHA256"|"$HAL_PATCHED_SHA256"|"$PRIMARY_XML_STOCK_SHA256")
+        "$POLICY_STOCK_SHA256"|"$POLICY_PREVIOUS_SHA256"|"$POLICY_INTERIM_SHA256"|"$POLICY_V062_SHA256"|"$POLICY_V064_SHA256"|"$POLICY_V065_SHA256"|"$POLICY_PATCHED_SHA256"|"$COMPONENTS_STOCK_SHA256"|"$FLINGER_STOCK_SHA256"|"$FLINGER_PATCHED_SHA256"|"$USB_STOCK_SHA256"|"$USB_PATCHED_SHA256"|"$HAL_STOCK_SHA256"|"$HAL_PATCHED_SHA256"|"$PRIMARY_XML_STOCK_SHA256")
             ui_print "- $label hash is a known reference state"
             ;;
         *)
@@ -229,6 +233,7 @@ write_patch() {
 }
 
 require_elf64_aarch64 "$POLICY_SOURCE" "$POLICY_MIN_SIZE" AudioPolicyManager
+require_elf64_aarch64 "$COMPONENTS_SOURCE" "$COMPONENTS_MIN_SIZE" AudioPolicyComponents
 require_elf64_aarch64 "$FLINGER_SOURCE" "$FLINGER_MIN_SIZE" AudioFlinger
 require_elf64_aarch64 "$USB_SOURCE" "$USB_MIN_SIZE" Qualcomm-USB
 require_elf64_aarch64 "$HAL_SOURCE" "$HAL_MIN_SIZE" Qualcomm-AIDL-HAL
@@ -244,6 +249,8 @@ PRIMARY_XML_ORIGINAL_SIZE=$(stat -c '%s' "$PRIMARY_XML_SOURCE")
 
 require_binary_string "$POLICY_SOURCE" deep_buffer_out AudioPolicyManager
 require_binary_string "$POLICY_SOURCE" HifiSampleRateManager: AudioPolicyManager
+require_binary_string "$COMPONENTS_SOURCE" SwAudioOutputDescriptor AudioPolicyComponents
+require_binary_string "$COMPONENTS_SOURCE" DeviceVector AudioPolicyComponents
 require_binary_string "$FLINGER_SOURCE" readOutputParameters_l AudioFlinger
 require_binary_string "$USB_SOURCE" readSupportedSampleRate Qualcomm-USB
 require_binary_string "$HAL_SOURCE" 'Hifi: coming samplerate is' Qualcomm-AIDL-HAL
@@ -284,6 +291,21 @@ require_hex "$POLICY_SOURCE" 874412 16 \
     a8024039a90a40f91f0100728303899a 'shared USB arbiter pre-context'
 require_hex "$POLICY_SOURCE" 874432 16 \
     62faffb042140f9160008052e1031faa 'shared USB arbiter post-context'
+require_hex "$POLICY_SOURCE" 515984 4 5f2403d5 'USB-only sender gate pre-context'
+require_hex "$POLICY_SOURCE" 515992 16 \
+    3f2303d5ffc301d1fd7b04a9f65705a9 'USB-only sender gate post-context'
+require_hex "$POLICY_SOURCE" 385372 24 \
+    60a20291a11300d1f698ff97140040f9b4031ff8742500b4 \
+    'mOutputs exact-handle lookup layout'
+require_hex "$COMPONENTS_SOURCE" 331308 64 \
+    810240f9980a40f9e00315aade5201947f0218eb22020054810240f9e80201cb08410f910815c8931f7900f1c8030054c826c81a88030036880640f90011138b \
+    'output collection 16-byte item layout'
+require_hex "$COMPONENTS_SOURCE" 292552 32 \
+    c0035fd681a20391e00313aaf44f49a9f54340f9fd7b47a9ff830291bf2303d5 \
+    'output descriptor current DeviceVector offset'
+require_hex "$COMPONENTS_SOURCE" 533484 56 \
+    e00317aae10318aaa111ff971a0040f91f2003d5486f1310410340f9080101cb08e13f910825c8931f0900f1621b0054484b41b91f011c6b \
+    'DeviceDescriptor audio_devices_t offset'
 require_hex "$POLICY_SOURCE" 800672 12 \
     1c5800940041201ed1ffff17 'executable cave pre-context'
 require_hex "$POLICY_SOURCE" 802816 16 \
@@ -305,6 +327,8 @@ require_one_of_hex "$POLICY_SOURCE" 350044 4 \
     'a8c303d1 19b80114' 'Preferred Mixer routing hook'
 require_one_of_hex "$POLICY_SOURCE" 874428 4 \
     'd9020036 5bb8ff17' 'shared USB backend arbiter'
+require_one_of_hex "$POLICY_SOURCE" 515988 4 \
+    'e20a0034 d3160114' 'USB-only sampling-rate sender gate'
 require_one_of_hex "$FLINGER_SOURCE" 1772164 4 '480d0054 6a000014' 'Mixer synchronization'
 require_one_of_hex "$USB_SOURCE" 29024 4 '20620500 44ac0000' 'USB rate slot 1'
 require_one_of_hex "$USB_SOURCE" 29052 4 '44ac0000 20620500' 'USB rate slot 2'
@@ -322,7 +346,7 @@ fi
 region_is_zero "$POLICY_SOURCE" 801058 6 \
     || abort "! Alignment gap after Preferred Mixer cave is occupied"
 ARBITER_CAVE_OFFSET=801064
-ARBITER_CAVE_CAPACITY=1752
+ARBITER_CAVE_CAPACITY=440
 ARBITER_CAVE_SIZE=$(stat -c '%s' "$MODPATH/patches/shared_arbiter_cave.bin" 2>/dev/null)
 [ -n "$ARBITER_CAVE_SIZE" ] && [ "$ARBITER_CAVE_SIZE" -le "$ARBITER_CAVE_CAPACITY" ] \
     || abort "! Shared USB arbiter exceeds the reserved executable cave"
@@ -339,10 +363,30 @@ fi
 region_is_zero "$POLICY_SOURCE" "$ARBITER_CAVE_REMAINDER_OFFSET" \
     "$ARBITER_CAVE_REMAINDER_SIZE" \
     || abort "! Shared USB arbiter cave remainder is not empty"
+USB_GATE_CAVE_OFFSET=801504
+USB_GATE_CAVE_CAPACITY=1312
+USB_GATE_CAVE_SIZE=$(stat -c '%s' "$MODPATH/patches/usb_output_gate_cave.bin" 2>/dev/null)
+[ -n "$USB_GATE_CAVE_SIZE" ] && [ "$USB_GATE_CAVE_SIZE" -le "$USB_GATE_CAVE_CAPACITY" ] \
+    || abort "! USB-only sender gate exceeds the reserved executable cave"
+USB_GATE_CAVE_REMAINDER_OFFSET=$((USB_GATE_CAVE_OFFSET + USB_GATE_CAVE_SIZE))
+USB_GATE_CAVE_REMAINDER_SIZE=$((USB_GATE_CAVE_CAPACITY - USB_GATE_CAVE_SIZE))
+if region_matches_file "$POLICY_SOURCE" "$USB_GATE_CAVE_OFFSET" \
+        "$MODPATH/patches/usb_output_gate_cave.bin"; then
+    usb_gate_cave_state=patched
+elif region_is_zero "$POLICY_SOURCE" "$USB_GATE_CAVE_OFFSET" "$USB_GATE_CAVE_CAPACITY"; then
+    usb_gate_cave_state=stock
+else
+    abort "! USB-only sender-gate executable cave is occupied or partially patched"
+fi
+region_is_zero "$POLICY_SOURCE" "$USB_GATE_CAVE_REMAINDER_OFFSET" \
+    "$USB_GATE_CAVE_REMAINDER_SIZE" \
+    || abort "! USB-only sender-gate cave remainder is not empty"
 ui_print "- Preferred Mixer cave structural state: $preferred_cave_state"
 ui_print "- Shared USB arbiter cave structural state: $arbiter_cave_state"
+ui_print "- USB-only sender gate cave structural state: $usb_gate_cave_state"
 
 report_known_hash "$POLICY_SOURCE" AudioPolicyManager
+report_known_hash "$COMPONENTS_SOURCE" AudioPolicyComponents
 report_known_hash "$FLINGER_SOURCE" AudioFlinger
 report_known_hash "$USB_SOURCE" Qualcomm-USB
 report_known_hash "$HAL_SOURCE" Qualcomm-AIDL-HAL
@@ -409,6 +453,17 @@ case "$arbiter_branch_state:$arbiter_cave_state" in
     *) abort "! Shared USB arbiter patch combination is inconsistent" ;;
 esac
 
+usb_gate_branch_state=$(read_hex "$POLICY_DEST" 515988 4)
+case "$usb_gate_branch_state:$usb_gate_cave_state" in
+    e20a0034:stock)
+        write_patch "$MODPATH/patches/usb_output_gate_cave.bin" "$POLICY_DEST" \
+            "$USB_GATE_CAVE_OFFSET"
+        write_patch "$MODPATH/patches/usb_output_gate_branch.bin" "$POLICY_DEST" 515988
+        ;;
+    d3160114:patched) ;;
+    *) abort "! USB-only sender-gate patch combination is inconsistent" ;;
+esac
+
 flinger_state=$(read_hex "$FLINGER_DEST" 1772164 4)
 if [ "$flinger_state" = 480d0054 ]; then
     write_patch "$MODPATH/patches/flinger_sync_patch.bin" "$FLINGER_DEST" 1772164
@@ -468,6 +523,13 @@ region_matches_file "$POLICY_DEST" "$ARBITER_CAVE_OFFSET" \
 region_is_zero "$POLICY_DEST" "$ARBITER_CAVE_REMAINDER_OFFSET" \
     "$ARBITER_CAVE_REMAINDER_SIZE" \
     || abort "! Shared USB arbiter overflowed its reserved cave region"
+require_hex "$POLICY_DEST" 515988 4 d3160114 'patched USB-only sender-gate branch'
+region_matches_file "$POLICY_DEST" "$USB_GATE_CAVE_OFFSET" \
+    "$MODPATH/patches/usb_output_gate_cave.bin" \
+    || abort "! USB-only sender-gate executable cave write verification failed"
+region_is_zero "$POLICY_DEST" "$USB_GATE_CAVE_REMAINDER_OFFSET" \
+    "$USB_GATE_CAVE_REMAINDER_SIZE" \
+    || abort "! USB-only sender gate overflowed its reserved cave region"
 require_hex "$FLINGER_DEST" 1772164 4 6a000014 'patched Mixer synchronization'
 require_hex "$USB_DEST" 29024 4 44ac0000 'patched USB 44.1 slot'
 require_hex "$USB_DEST" 29052 4 20620500 'patched USB 352.8 slot'
@@ -499,6 +561,8 @@ ui_print "- Preferred Mixer: DEFAULT behavior, PCM32/stereo bootstrap; never BIT
 ui_print "- Ownership: preserve repeated-track counts; replace only when whitelist UID changes"
 ui_print "- HIFI profile: repair Xiaomi's zero default rate; retain native LATEST_MAX strategy"
 ui_print "- USB arbitration: native HIFI/Deep counters control their one shared backend"
+ui_print "- Transport gate: sampling_rate writes require the exact output route to be USB-only"
+ui_print "- Bluetooth/speaker/wired/mixed routes fail closed and retain stock Android policy"
 ui_print "- Concurrency: Deep temporarily wins; HIFI rate is restored when Deep becomes idle"
 ui_print "- Profile: initialize Xiaomi deep_buffer_out without globally enabling Feature 8"
 ui_print "- Strategy: LATEST_MAX only for Deep Buffer/HIFI; preserve VoIP's stock policy"

@@ -1,6 +1,6 @@
 id=xiaomi-usb-dac-rate-follower
 name=Xiaomi USB DAC Rate Follower
-version=0.6.5-alpha
-versionCode=18
+version=0.6.6-alpha
+versionCode=19
 author=nateafish
-description=Firmware-pinned Xiaomi USB rate following with native HIFI/Deep backend arbitration. No daemon or Zygisk. Experimental.
+description=Firmware-pinned Xiaomi USB rate following with native arbitration and a fail-closed USB-only output gate. No daemon or Zygisk. Experimental.
