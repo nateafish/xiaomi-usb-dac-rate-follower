@@ -2,7 +2,8 @@
 
 EXPECTED_FINGERPRINT='Xiaomi/nezha/nezha:17/CP2A.260605.016/OS4.0.0.15.XPACNXM:user/release-keys'
 POLICY_STOCK_SHA256=e0bd4444461df3608f2baa05d4f5db22d0d5ddfb23cabb36474ff5f5c22da3cb
-POLICY_PATCHED_SHA256=44d6d59dd395c2a5dfee6d3cf2c2f1a485377633a9e6d3b78754cc2b1b3f92c3
+POLICY_PREVIOUS_SHA256=44d6d59dd395c2a5dfee6d3cf2c2f1a485377633a9e6d3b78754cc2b1b3f92c3
+POLICY_PATCHED_SHA256=34916265a7375e87db57125e3e603702a07335aed5f320ad61c58fa9c757b1b6
 FLINGER_STOCK_SHA256=d499d92e115dac7ee8e7e5dcbd53079e6a61ffccbe6d34481f239813e1f3695f
 FLINGER_PATCHED_SHA256=66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
 USB_STOCK_SHA256=d36085dbf0e4f7979ee6b94540b216d949d0f74ab0cda385fdfd5cfc8cd0c296
@@ -50,6 +51,18 @@ require_known_source() {
     esac
 }
 
+require_known_policy() {
+    actual_sha=$(sha_of "$POLICY_SOURCE")
+    case "$actual_sha" in
+        "$POLICY_STOCK_SHA256"|"$POLICY_PREVIOUS_SHA256"|"$POLICY_PATCHED_SHA256") ;;
+        *)
+            ui_print "! Unsupported library: $POLICY_SOURCE"
+            ui_print "! Found SHA-256: $actual_sha"
+            abort "! Refusing to patch mismatched firmware"
+            ;;
+    esac
+}
+
 write_patch() {
     patch_file=$1
     target_file=$2
@@ -58,7 +71,7 @@ write_patch() {
         || abort "! Failed to patch $target_file at $target_offset"
 }
 
-require_known_source "$POLICY_SOURCE" "$POLICY_STOCK_SHA256" "$POLICY_PATCHED_SHA256"
+require_known_policy
 require_known_source "$FLINGER_SOURCE" "$FLINGER_STOCK_SHA256" "$FLINGER_PATCHED_SHA256"
 require_known_source "$USB_SOURCE" "$USB_STOCK_SHA256" "$USB_PATCHED_SHA256"
 
@@ -71,6 +84,9 @@ cp -p "$USB_SOURCE" "$USB_DEST" || abort "! Cannot stage Qualcomm USB library"
 if [ "$(sha_of "$POLICY_DEST")" = "$POLICY_STOCK_SHA256" ]; then
     write_patch "$MODPATH/patches/is_app_allowed_hook.bin" "$POLICY_DEST" 867276
     write_patch "$MODPATH/patches/latest_max_patch.bin" "$POLICY_DEST" 869060
+fi
+if [ "$(sha_of "$POLICY_DEST")" = "$POLICY_PREVIOUS_SHA256" ]; then
+    write_patch "$MODPATH/patches/effect_gate_patch.bin" "$POLICY_DEST" 873908
 fi
 if [ "$(sha_of "$FLINGER_DEST")" = "$FLINGER_STOCK_SHA256" ]; then
     write_patch "$MODPATH/patches/flinger_sync_patch.bin" "$FLINGER_DEST" 1772164
@@ -94,6 +110,7 @@ set_perm "$USB_DEST" 0 0 0644 u:object_r:vendor_file:s0
 
 ui_print "- Whitelist: Apple Music and NetEase Cloud Music only"
 ui_print "- Strategy: Xiaomi LATEST_MAX across overlapping song tracks"
+ui_print "- USB deep-buffer: ignore the false global Dolby/MiSound gate, then apply the whitelist"
 ui_print "- Mixer: synchronize in place for 44.1/48/88.2/96/192 kHz changes"
 ui_print "- USB capability: 44.1 kHz is inside Qualcomm's seven-rate list"
 ui_print "- PCM32 remains the HAL/mixer format; no Float HAL claim"

@@ -19,7 +19,7 @@ QTI AIDL HAL / PAL changes the USB backend
 AudioFlinger MixerThread must read back and adopt the HAL rate
 ```
 
-The v0.6.1 design repairs this existing chain. It does not create a second state
+The v0.6.2 design repairs this existing chain. It does not create a second state
 machine or repeatedly inspect playback from userspace.
 
 ## Where configuration lives
@@ -102,6 +102,26 @@ function's unconditional branch enables Xiaomi's original in-place update for
 the missing low-rate boundary. It avoids closing the output, returning
 `DEAD_OBJECT`, restoring AudioTracks, or duplicating Hifi reference counts.
 
+## Xiaomi's false global-effect gate
+
+`HifiSampleRateManager::handlePlaybackEvent()` special-cases
+`deep_buffer_out`. If the manager's global `activeEffect` is not `none`, stock
+logs `deep_buffer with active effect, skipping sample rate management` and
+returns before its app allow check.
+
+The v0.6.1 live capture proved this state is too broad for USB: NetEase's
+`TrackClientDescriptor` carried 44100 Hz, the dynamic USB profile contained
+44100 Hz, and AudioFlinger's USB `AudioOut_15` thread had zero effect chains.
+Nevertheless, a separate global `DAP_offload` Dolby state caused Xiaomi to
+skip the event, so no `sampling_rate=44100` reached QTI AIDL HAL/PAL.
+
+At exact file offset `0xd55b4`, v0.6.2 changes the conditional branch to the
+same function's normal continuation at `0xd55e0`. That continuation still
+executes `isAppAllowed()`, whose replacement accepts only Apple Music and
+NetEase. The patch therefore removes no per-package restriction and adds no
+polling; it only prevents an unrelated global effect state from vetoing an
+effect-free USB output thread.
+
 ## Why the Qualcomm USB capability patch remains necessary
 
 The DAC descriptor and ALSA endpoint advertise native 44.1 kHz, but QTI PAL's
@@ -123,7 +143,7 @@ This preserves the seven-entry ABI and makes the framework/Hifi manager see
 ## Selective package handling
 
 The exported `HifiSampleRateManager::isAppAllowed(profile, app)` thunk has one
-direct internal implementation. v0.6.1 replaces that implementation with a
+direct internal implementation. v0.6.2 replaces that implementation with a
 196-byte PAC-compatible function that:
 
 - preserves the stock prologue and epilogue addresses for unwind compatibility;
@@ -164,6 +184,6 @@ feature gates and 48 kHz condition are vendor modifications.
 
 KernelSU 3+ delegates system overlays to one active metamodule. The test phone
 now uses official `meta-overlayfs 1.3.1`; `/data/adb/metamodule` points to it and
-its ext4 content image mounts successfully. v0.6.1 intentionally refuses a
+its ext4 content image mounts successfully. v0.6.2 intentionally refuses a
 KernelSU installation without an active metamodule and contains no custom bind
 fallback.

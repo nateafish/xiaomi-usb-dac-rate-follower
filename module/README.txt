@@ -1,10 +1,10 @@
-Xiaomi USB DAC Rate Follower v0.6.1-alpha
+Xiaomi USB DAC Rate Follower v0.6.2-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
 Android 17. The installer verifies the build fingerprint and SHA-256 of both
 stock system libraries before making a systemless copy.
 
-The module changes three narrow parts of Xiaomi's existing native Hifi path:
+The module changes five narrow parts of Xiaomi's existing native Hifi path:
 
 1. HifiSampleRateManager allows only com.apple.android.music and
    com.netease.cloudmusic.
@@ -14,6 +14,10 @@ The module changes three narrow parts of Xiaomi's existing native Hifi path:
    Hifi sampling_rate change, including 48 kHz -> 44.1 kHz and the reverse.
 4. Qualcomm PAL's fixed seven-rate priority list includes 44.1 kHz instead of
    352.8 kHz, matching the DAC's verified native 44.1 kHz capability.
+5. Xiaomi's deep-buffer global-effect guard is bypassed before its existing
+   app allow check. Live evidence showed Dolby globally active while the USB
+   output itself had zero effect chains; stock therefore rejected a valid
+   44.1 kHz NetEase request before it reached the HAL.
 
 The USB/HAL mixer remains PCM32. PCM16, PCM24, or Float submitted by an app is
 handled by normal AudioFlinger conversion. This build does not claim strict

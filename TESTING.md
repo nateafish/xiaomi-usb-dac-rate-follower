@@ -33,7 +33,7 @@ Patched hashes:
 
 ```text
 libaudiopolicymanagerdefault.so
-44d6d59dd395c2a5dfee6d3cf2c2f1a485377633a9e6d3b78754cc2b1b3f92c3
+34916265a7375e87db57125e3e603702a07335aed5f320ad61c58fa9c757b1b6
 
 libaudioflinger.so
 66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
@@ -53,7 +53,7 @@ libdev_usb.so
 ## Phased test
 
 1. With the old module disabled, verify all three stock hashes and a working USB DAC.
-2. Install `v0.6.1-alpha`; the installer must report exact fingerprint/hash
+2. Install `v0.6.2-alpha`; the installer must report exact fingerprint/hash
    acceptance and metamodule availability. Reboot normally.
 3. Before opening a player, verify all three patched hashes, confirm 44.1 kHz
    appears in the USB dynamic profile, and confirm audioserver is stable.
@@ -70,6 +70,14 @@ libdev_usb.so
    follow it.
 10. Test old/new song overlap, pause/resume, force-stop, USB unplug/replug, and
     a second app playing concurrently.
+
+The v0.6.2 policy hash is
+`34916265a7375e87db57125e3e603702a07335aed5f320ad61c58fa9c757b1b6`.
+Its added four-byte patch changes the branch at file offset `0xd55b4`. A live
+v0.6.1 capture established the precondition: NetEase requested 44100 Hz,
+the USB profile advertised 44100 Hz, the USB MixerThread had zero effect
+chains, but Xiaomi stopped after observing its global Dolby state and sent no
+`sampling_rate=44100` request to the HAL.
 
 ## Pass criteria
 
