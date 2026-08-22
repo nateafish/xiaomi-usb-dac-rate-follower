@@ -19,7 +19,7 @@ QTI AIDL HAL / PAL changes the USB backend
 AudioFlinger MixerThread must read back and adopt the HAL rate
 ```
 
-The v0.6.3 design repairs this existing chain. It does not create a second state
+The v0.6.5 design repairs this existing chain. It does not create a second state
 machine or repeatedly inspect playback from userspace.
 
 ## Where configuration lives
@@ -51,7 +51,8 @@ Configuration therefore exists in several forms:
 
 Reverse engineering of the exact system policy library found:
 
-- built-in `deep_buffer_out` profile, default 48 kHz;
+- three built-in profile configurations: `deep_buffer_out`, `hifi_playback`,
+  and `voip_playback`;
 - built-in whitelist originally containing WeChat and QQ;
 - `onPlaybackStarted()` and `onPlaybackStopped()` lifecycle integration;
 - per-rate active application counts;
@@ -63,11 +64,53 @@ Reverse engineering of the exact system policy library found:
 The firmware property `ro.vendor.audio.hifi.config=13` enables Xiaomi features
 6, 7, and 9. Feature 7 is the important AudioFlinger Hifi synchronization path.
 
-Feature 6 constructs `HifiSampleRateManager`, but profile creation in
+The three static records are 0x58 bytes each. Their important fields are the
+name at +0x0, strategy at +0x8, default sample rate at +0xc, and optional
+device type at +0x28. `hifi_playback` already has `LATEST_MAX` and USB device
+type `0x04000000`, but its default sample rate is zero. The existing
+`checkOutputsForDevice()` USB path compares the IOProfile name with
+`hifi_playback` and calls `createHifiProfile()`; that function loads +0xc and
+exits at `0xd4114` when it is zero, logging `sample rate cannot be 0`.
+
+v0.6.5 changes that HIFI default to 48000 while the static records are being
+constructed. It also changes only Deep Buffer's static strategy from
+`FIRST_LOCK` to `LATEST_MAX`. The common `ProfileManager::initialize()` call
+continues to load each record's strategy, so VoIP is not changed.
+
+Feature 6 constructs `HifiSampleRateManager`, but Deep profile creation in
 `AudioPolicyManager::initialize()` has a second Feature 8 check. At file offset
 `0xc3260`, stock exits before calling `createHifiProfile("deep_buffer_out")`.
-v0.6.3 replaces only that early-exit instruction with a NOP. It does not change
+v0.6.5 replaces only that early-exit instruction with a NOP. It does not change
 the property to 15 and does not globally enable Feature 8's effect handling.
+
+## Package-specific HIFI routing through Preferred Mixer
+
+The active AIDL policy exposes `hifi_playback` as an unflagged, dynamic,
+USB-only output profile. AOSP's `setPreferredMixerAttributes()` can select such
+a dynamic profile with `AUDIO_MIXER_BEHAVIOR_DEFAULT`; BIT_PERFECT is not
+required. The standard output-selection path opens that profile for the owning
+UID, while other UIDs ignore the preference.
+
+Immediately before the firmware's existing preferred-attribute lookup,
+`getOutputForAttrInt()` has the resolved attributes, selected USB port, product
+strategy, and UID. The outer `getOutputForAttr()` stores the resolved package
+as a `String16` at `AudioPolicyManager+0x480` under the policy lock.
+
+The v0.6.5 hook acts only for MEDIA on a selected USB accessory/device/headset
+type and an exact UTF-16 Apple Music or NetEase package. It intentionally does
+not compare framework port IDs, which are assigned dynamically when a DAC is
+attached. It queries the current preferred
+object and reads its owner UID at +0x14. The same UID reuses the object, so
+repeated AudioTracks do not reset active-client counts. A missing owner, or a
+real switch between the two whitelist UIDs, installs one 48000/stereo/PCM32
+preference with DEFAULT behavior.
+
+That fixed format is only a HIFI bootstrap. On `startOutput()`, Xiaomi reads
+the AudioTrack rate from its client descriptor and calls
+`onPlaybackStarted(profile, uid, sampleRate)`; the existing LATEST_MAX/event
+counter sends the real rate to the HAL. `stopOutput()` provides the matching
+lifecycle event. The hook is 374 bytes in a verified zero-filled executable
+cave and allocates no persistent writable state.
 
 ### Why FIRST_LOCK fails gapless playback
 
@@ -79,6 +122,100 @@ matches the observed stale 44.1 kHz output and speed errors.
 `LATEST_MAX` uses the active rate counts already maintained by Xiaomi. During
 overlap, the highest active rate wins; after the old high-rate track stops, the
 lower new rate becomes eligible. This is deterministic and event-driven.
+
+## Deep Buffer's ordering defect
+
+Static analysis of `HifiSampleRateManager::handlePlaybackEvent()` found an
+important limitation in Xiaomi's inherited Deep Buffer implementation. The
+function updates the profile's per-rate application count first, and only then
+checks the active effect and calls `isAppAllowed()`:
+
+```text
+start/stop event
+    -> updateFirstLockStrategy() or updateLatestMaxStrategy()
+    -> calculate candidate active rate
+    -> Deep Buffer effect gate
+    -> isAppAllowed(profile, current app)
+    -> optionally triggerHardwareSampleRateUpdate()
+```
+
+Consequently, a non-whitelisted application can change Deep Buffer's internal
+rate counts even though its start event is later denied permission to update
+the HAL. A subsequent allowed-app event can then make a decision from those
+changed counts. This explains the observed class of failures where another app
+starts at 48 kHz, the USB backend does not switch immediately, and the allowed
+44.1 kHz app does not reliably regain its rate afterward.
+
+This is not evidence that reference counting itself is unnecessary. Balanced
+start/stop counts are how the native code handles gapless overlap. The defect is
+that the permission decision and the count/update decision are not one atomic
+policy for Deep Buffer on this migrated baseline.
+
+`hifi_playback` avoids most of this pollution because Preferred Mixer routes
+only the selected owner UID to that IOProfile. It does not by itself solve the
+case where a normal Deep Buffer stream and the HIFI stream are simultaneously
+active against one physical USB backend. v0.6.5 deliberately treats all active
+Deep counts as temporary backend ownership while selected HIFI exists, then
+returns to the HIFI maximum when Deep becomes empty. This still requires the
+on-device concurrency matrix before it can be called production-safe.
+
+### Stale stop-package state
+
+`onAppChanged(name, rate, starting)` stores the latest start package at manager
+offset `+0x160`, the latest stop package at `+0x178`, and package/rate history
+at `+0x190`. The later playback handler always copies `+0x160`, including on a
+stop event; it never reads `+0x178`. This is a concrete inherited defect, not a
+timing guess. It can make a stop decision appear to belong to the most recent
+starter.
+
+The v0.6.5 arbiter does not use either last-package string. Package scope is
+established by routing the selected UID to HIFI, while balanced native profile
+counts determine shared-backend ownership. This avoids adding a second package
+tracker and avoids relying on Xiaomi's stale stop field.
+
+## The older system_ext `selectOutput()` path
+
+`/system_ext/lib64/libaudiopolicymanagerimpl.so` also contains an older dynamic
+output migration path. `AudioPolicyManagerImpl::selectOutput()` can detect a
+sample-rate mismatch, build `OutputSampleRate=<rate>;add_track=<rate>`, send it
+to the current output, transfer clients, and reroute the descriptor.
+
+This path is active: the AOSP-side `AudioPolicyManager::selectOutput()` calls
+the vendor stub after ordinary output selection. It is not, however, a generic
+music rate follower. Its decisive mask bit is produced by
+`getAppMaskByNameImpl()` from app category 21, which this firmware's registry
+maps to `karaoke_input_source`. The nearby `deep_buffer_bypass` category only
+controls `ro.vendor.audio.ce.bypass`; it does not enable sample-rate following.
+Adding Apple Music or NetEase to `deep_buffer_bypass` would therefore patch the
+wrong subsystem.
+
+The related `dynamic_audio_usecase_pkg` string belongs to
+`setAppNameParameter()` and is sent for category 43 (`short_video`). It is also
+not the missing general USB music whitelist.
+
+These findings leave Xiaomi's `HifiSampleRateManager` as the correct native
+base for this project, while the older `selectOutput()` implementation remains
+useful evidence for how Xiaomi previously migrated clients without a userspace
+daemon.
+
+## HAL reconfiguration is in-place, not APM reopen
+
+`AudioPolicyManager::sendkeySamplingRateToAHal()` constructs the standard
+`sampling_rate` parameter and calls `AudioPolicyClientInterface::setParameters`
+for the selected output. It does not call AOSP `reopenOutput()`.
+
+In `MiStreamOutPrimary::setVendorParameters()`, QTI parses that rate, updates
+the stream's internal `AudioPortConfig`, places HIFI (usecase 13) and VoIP
+(usecase 8) into standby, and lets the next write run
+`MiStreamOutPrimary::configure()` through PAL. The v0.6.5 HAL patch extends that
+same existing standby path to Deep Buffer (usecase 3). AudioFlinger's
+`readOutputParameters_l(true)` then synchronizes the MixerThread with the rate
+actually adopted by HAL.
+
+This confirms that the intended vendor chain is an in-place stream
+reconfiguration. Replacing it with unconditional APM close/reopen would be a
+different state machine and carries the same dead-output and repeated-open
+risks observed in earlier prototypes.
 
 ## AudioFlinger’s hidden 48 kHz boundary
 
@@ -122,6 +259,15 @@ The v0.6.1 live capture proved the USB path itself was ready: NetEase's
 The device declaration is also unambiguous:
 `persist.audio.effect.device_map=...;usb_device:none`.
 
+This property is where the captured “Original sound” state is actually visible
+for USB: the endpoint maps to `none`, while the speaker maps to `dolby` and
+`persist.vendor.audio.misound.disable=true`. It is an effect-routing declaration,
+not a sample-rate capability declaration. The separate HIFI feature file paths
+embedded in Xiaomi's policy extension are `/vendor/etc/AudioFeatureConfig.xml`
+and `/data/system/audio/AudioFeatureConfig.xml`; neither file was present in the
+offline archive, so their live contents remain a read-only capture item rather
+than an assumption in the module.
+
 The disconnect is inside policy. The Hifi manager constructor writes Unknown=3
 to its independent field at object offset `0x158`. `setProParameters()` can
 forward `activeEffect` to `onEffectChanged()`, but only when both Hifi Feature 6
@@ -129,7 +275,7 @@ and Feature 8 are enabled. This firmware initializes the manager through
 Feature 6 while its configuration leaves Feature 8 disabled, so Unknown can
 remain stale even though the selected USB effect is None.
 
-At exact file offset `0xd55b4`, v0.6.3 changes `b.eq` to unsigned `b.hs`.
+At exact file offset `0xd55b4`, v0.6.5 changes `b.eq` to unsigned `b.hs`.
 The branch now accepts both None=2 and Unknown=3, while still rejecting
 Dolby=0 and MiSound=1. Its target remains the original continuation at
 `0xd55e0`, which executes `isAppAllowed()`; only Apple Music and NetEase pass.
@@ -156,7 +302,7 @@ This preserves the seven-entry ABI and makes the framework/Hifi manager see
 ## Selective package handling
 
 The exported `HifiSampleRateManager::isAppAllowed(profile, app)` thunk has one
-direct internal implementation. v0.6.3 replaces that implementation with a
+direct internal implementation. v0.6.5 replaces that implementation with a
 196-byte PAC-compatible function that:
 
 - preserves the stock prologue and epilogue addresses for unwind compatibility;
@@ -189,6 +335,45 @@ change sample values.
 - `system/media/audio/include/system/audio.h`
 - `hardware/interfaces/audio/aidl/default/`
 
+## Preferred Mixer crash and 384 kHz recovery loop
+
+The failed Bit Perfect prototype exposed two independent framework defects.
+The captured audioserver tombstone dereferences a null output descriptor in
+`reopenOutput()` from `setPreferredMixerAttributes()`. Android 17 adds the same
+output handle to a vector once per matching active client; overlapping tracks
+can therefore close the handle on the first iteration and look it up again on
+the second. The exact analysis is recorded in
+[`android17-preferred-mixer-failure.md`](android17-preferred-mixer-failure.md).
+
+After those deaths, `hifi_playback` reopened at the dynamic profile's chosen
+384 kHz PCM32 default while the restored source track requested 44.1 kHz
+PCM16. Because the configurations did not match, the client did not receive
+the Bit Perfect flag, `startSource()` rejected it from the already Bit Perfect
+output, and AudioTrack restoration created the observed close/open loop.
+
+This is why v0.6.5 neither writes a Preferred Mixer preference per track nor
+marks the dynamic HIFI profile Bit Perfect. A future official Bit Perfect mode
+must first guard the duplicate reopen list and define deterministic dynamic
+profile recovery behavior.
+
+## Shared USB backend arbitration
+
+Deep Buffer and HIFI keep independent rate counters but drive one physical USB
+backend. The target native behavior is now specified by
+[`tests/rate_arbiter_model.py`](../tests/rate_arbiter_model.py): Deep playback
+temporarily wins while a selected HIFI package is active, stopping the last
+Deep track restores the still-active HIFI rate, and absence of selected HIFI
+activity returns policy to 48 kHz. The model also requires duplicate same-rate
+tracks to produce no redundant HAL writes.
+
+The binary exposes enough existing state to implement this without a daemon:
+each `ProfileManager` owns its active-rate count tree and current maximum, and
+the hardware callback already centralizes `sampling_rate=<rate>`. The remaining
+v0.6.5 hooks that callback decision at `0xd57bc`. Its 440-byte cave routine
+looks up both profiles under the manager's existing shared lock, summarizes
+their native count maps, and forces reevaluation only on a local maximum change
+or a first/last cross-profile ownership boundary.
+
 The strongest evidence for this build is the exact on-device binary and live
 HAL trace; AOSP explains the surrounding standard behavior, while the Xiaomi
 feature gates and 48 kHz condition are vendor modifications.
@@ -197,6 +382,6 @@ feature gates and 48 kHz condition are vendor modifications.
 
 KernelSU 3+ delegates system overlays to one active metamodule. The test phone
 now uses official `meta-overlayfs 1.3.1`; `/data/adb/metamodule` points to it and
-its ext4 content image mounts successfully. v0.6.3 intentionally refuses a
+its ext4 content image mounts successfully. v0.6.5 intentionally refuses a
 KernelSU installation without an active metamodule and contains no custom bind
 fallback.

@@ -1,9 +1,10 @@
-.section .latest_max_patch, "a"
+.section .strategy_restore_patch, "a"
 .p2align 2
-.global latest_max_patch
-latest_max_patch:
-    // mov w3, wzr: ProfileManager::initialize(..., LATEST_MAX = 0)
-    .inst 0x2a1f03e3
+.global strategy_restore_patch
+strategy_restore_patch:
+    // Restore the stock per-profile Strategy load.  Deep Buffer is changed to
+    // LATEST_MAX in its own static ProfileConfig, leaving VoIP untouched.
+    ldr w3, [x24, #8]
 
 .section .profile_init_patch, "a"
 .p2align 2
@@ -27,6 +28,18 @@ effect_gate_patch:
 flinger_sync_patch:
     // b 0x1b0c2c from 0x1b0a84: readOutputParameters_l(true)
     .inst 0x1400006a
+
+.section .hal_deep_buffer_reopen_patch, "a"
+.p2align 2
+.global hal_deep_buffer_reopen_patch
+hal_deep_buffer_reopen_patch:
+    // MiStreamOutPrimary::setVendorParameters(sampling_rate): Xiaomi only
+    // calls standby() for VOIP(8) and HIFI(13). Preserve both and include
+    // DEEP_BUFFER_PLAYBACK(3) using bits 3, 8 and 13 of a local mask.
+    mov w9, #0x2108
+    lsr w9, w9, w8
+    tbz w9, #0, .+0x40
+    nop
 
 .section .usb_441_patch, "a"
 .p2align 2
