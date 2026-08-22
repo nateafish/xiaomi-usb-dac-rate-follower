@@ -42,9 +42,10 @@ Zygisk 或应用内 Hook。
 3. 让 AudioFlinger 在 44.1/48 kHz 边界也重新读取 HAL 已接受的采样率，
    避免 DAC 时钟已改变而 MixerThread 状态未更新。
 4. 允许高通 AIDL HAL 的 HIFI usecase 进入原有 PAL 设备重配置路径。
-5. 修正 HIFI 通道以 384 kHz 创建后留下的超大固定缓冲：原实现降至
-   48 kHz 后仍有 15360 帧（320 ms），降至 44.1 kHz 后约为 348 ms；模块
-   将低采样率 HIFI 缓冲限制在约 40 ms。
+5. 在动态 profile 完成 USB 能力查询后，仅将 `hifi_playback` 的初始打开
+   配置设为 PCM32/48 kHz。MixerThread、AIDL FMQ 与 PAL 因而从同一个
+   48 kHz 状态创建，QTI 原生 40 ms 计算会得到 1920 帧；后续切换继续由
+   小米原生链路统一更新 Mixer 与 HAL。
 6. 最后一个 HIFI 音轨释放后，通过小米原生生命周期将共享 USB 后端恢复
    至普通应用使用的 48 kHz。
 
@@ -57,11 +58,10 @@ Zygisk 或应用内 Hook。
 销毁并重建主 `AudioTrack`，AudioFlinger 也会对旧轨执行系统级保护淡出。
 这部分不是应用设置能够关闭的。
 
-本机实时日志还确认了更深层的问题：HIFI 输出已经显示为 48 kHz 时，AIDL
-共享缓冲仍保留 384 kHz 创建时的 15360 帧和 122880 字节，线程写入延迟
-约 448 ms。这个失配会把正常的轨道切换放大成第一秒音量忽大忽小、吞掉
-开头以及偶发爆音。本模块保留系统的防爆音淡出，只修正底层固定缓冲和
-采样率状态不一致的问题。
+HIFI 输出原本会以 384 kHz 创建，随后只改变 HAL 媒体配置；AIDL 共享缓冲
+却仍保留 15360 帧。模块让该输出从 48 kHz/1920 帧的一致初态创建，并在
+后续采样率事件中让 AudioFlinger 重读 HAL 状态、重建 AudioMixer。它保留
+系统的防爆音淡出，只修正底层缓冲和采样率状态不一致的问题。
 
 ### PCM 与 Bit Perfect
 
@@ -157,9 +157,10 @@ firmware is rejected.
    its MixerThread does not remain stale after the DAC clock changes.
 4. The QTI AIDL HIFI usecase is admitted to the existing PAL device
    reconfiguration path.
-5. The immutable HIFI buffer inherited from the initial 384 kHz profile is
-   corrected. The original 15360 frames become 320 ms at 48 kHz and about
-   348 ms at 44.1 kHz; this module keeps low-rate HIFI near 40 ms.
+5. After dynamic USB capability discovery, only `hifi_playback` is initially
+   opened as PCM32/48 kHz. MixerThread, the AIDL FMQ and PAL therefore start
+   from one coherent state, and QTI's stock 40 ms calculation creates 1920
+   frames. Xiaomi's native path updates Mixer and HAL together afterward.
 6. When the final HIFI track is released, Xiaomi's native lifecycle restores
    the shared USB backend to the normal 48 kHz mixer rate.
 
@@ -172,12 +173,11 @@ Disabling NetEase crossfade disables only the app's own effect. NetEase still
 destroys and recreates its main `AudioTrack` at a song boundary, while
 AudioFlinger applies a protective system fade to the old track.
 
-A live device dump exposed the larger defect: even after the HIFI output
-reported 48 kHz, its AIDL queue still held the 15360 frames and 122880 bytes
-chosen at 384 kHz, with roughly 448 ms thread-loop write latency. That mismatch
-magnifies a normal track transition into first-second volume pumping, missing
-attacks and occasional pops. The module keeps Android's anti-pop fade and
-repairs the fixed buffer and rate-state mismatch beneath it.
+The HIFI output originally started at 384 kHz and later changed only the HAL
+media configuration, leaving a 15360-frame AIDL queue behind. This module
+creates the output from a coherent 48 kHz/1920-frame state and makes
+AudioFlinger reread the accepted HAL state and rebuild AudioMixer on later rate
+events. Android's anti-pop fade remains intact.
 
 ### PCM and bit perfect
 

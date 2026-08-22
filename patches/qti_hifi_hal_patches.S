@@ -1,29 +1,26 @@
 // Exact-firmware AArch64 patches for Qualcomm's AIDL audio core HAL.
 //
 // Xiaomi's legacy HIFI policy changes an already-open stream with the vendor
-// "sampling_rate" parameter.  The Qualcomm HAL must therefore do two things:
-//   1. permit PAL device reconfiguration for the HIFI usecase (enum 3); and
-//   2. avoid sizing the immutable AIDL FMQ from the profile's initial 384 kHz
-//      sample rate, which otherwise leaves 15360 frames (320-348 ms) after a
-//      later 48/44.1 kHz in-place rate change.
+// "sampling_rate" parameter. The Qualcomm HAL must permit PAL device
+// reconfiguration for the HIFI usecase (enum 3).
+//
+// The frame-count function must remain stock. APM opens hifi_playback at
+// 48 kHz, so QTI's original rate * 40 / 1000 calculation naturally creates
+// the correct 1920-frame immutable FMQ.
 
-.extern HIFI_FRAME_COUNT_EPILOGUE
 .extern HIFI_USECASE_SKIP_RECONFIGURE
 
-.section .hifi_frame_count_cap_patch, "ax"
+.section .hifi_frame_count_stock, "a"
 .p2align 2
-.global hifi_frame_count_cap_patch
-hifi_frame_count_cap_patch:
-    // Entry replaces HifiPlayback::getFrameCount() after getSampleRate() has
-    // returned a valid sample rate in w0. Return min(rate, 48000) / 25:
-    // 1764 frames at 44.1 kHz, 1920 frames at 48 kHz and 1920 above 48 kHz.
-    // This keeps the fixed FMQ near 40 ms at low rates and no larger than that.
-    mov     w8, #48000
-    cmp     w0, w8
-    csel    w0, w0, w8, lo
-    mov     w8, #25
-    udiv    w0, w0, w8
-    b       HIFI_FRAME_COUNT_EPILOGUE
+.global hifi_frame_count_stock
+hifi_frame_count_stock:
+    // Original HifiPlayback::getFrameCount() body after getSampleRate().
+    .inst   0x93407c08
+    .inst   0x52800509
+    .inst   0x9bc97d09
+    .inst   0xeb0903ff
+    .inst   0x540001c1
+    .inst   0x8b20c908
 
 .section .hifi_usecase_reconfigure_patch, "ax"
 .p2align 2

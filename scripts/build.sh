@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.7.2-alpha
+VERSION=0.7.3-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -72,6 +72,20 @@ require_hex() {
     "$BUILD_DIR/native_hifi_select_hook.elf"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
+    "$ROOT_DIR/patches/hifi_dynamic_default.S" \
+    -o "$BUILD_DIR/hifi_dynamic_default.o"
+"$LLVM_BIN/ld.lld" --entry=hifi_dynamic_default_hook \
+    --section-start=.hifi_dynamic_default_branch=0x69860 \
+    --section-start=.hifi_dynamic_default_cave=0xc3b6c \
+    --defsym=HIFI_DYNAMIC_DEFAULT_RETURN=0x69864 \
+    "$BUILD_DIR/hifi_dynamic_default.o" \
+    -o "$BUILD_DIR/hifi_dynamic_default.elf"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .hifi_dynamic_default_branch="$BUILD_DIR/hifi_dynamic_default_branch.bin" \
+    --dump-section .hifi_dynamic_default_cave="$BUILD_DIR/hifi_dynamic_default_cave.bin" \
+    "$BUILD_DIR/hifi_dynamic_default.elf"
+
+"$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/usb_output_gate.S" -o "$BUILD_DIR/usb_output_gate.o"
 "$LLVM_BIN/ld.lld" --entry=usb_output_gate \
     --section-start=.usb_output_gate_branch=0x7df94 \
@@ -96,15 +110,14 @@ require_hex() {
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/qti_hifi_hal_patches.S" \
     -o "$BUILD_DIR/qti_hifi_hal_patches.o"
-"$LLVM_BIN/ld.lld" --entry=hifi_frame_count_cap_patch \
-    --section-start=.hifi_frame_count_cap_patch=0x279bd8 \
+"$LLVM_BIN/ld.lld" --entry=hifi_usecase_reconfigure_patch \
+    --section-start=.hifi_frame_count_stock=0x279bd8 \
     --section-start=.hifi_usecase_reconfigure_patch=0x230894 \
-    --defsym=HIFI_FRAME_COUNT_EPILOGUE=0x279c10 \
     --defsym=HIFI_USECASE_SKIP_RECONFIGURE=0x2308dc \
     "$BUILD_DIR/qti_hifi_hal_patches.o" \
     -o "$BUILD_DIR/qti_hifi_hal_patches.elf"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .hifi_frame_count_cap_patch="$BUILD_DIR/hifi_frame_count_cap_patch.bin" \
+    --dump-section .hifi_frame_count_stock="$BUILD_DIR/hifi_frame_count_stock.bin" \
     --dump-section .hifi_usecase_reconfigure_patch="$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" \
     "$BUILD_DIR/qti_hifi_hal_patches.elf"
 
@@ -113,26 +126,31 @@ require_size "$BUILD_DIR/hifi_app_branch.bin" 4
 require_size "$BUILD_DIR/native_hifi_cave.bin" 744
 require_size "$BUILD_DIR/latest_max_final_stop_patch.bin" 4
 require_size "$BUILD_DIR/latest_max_idle_rate_patch.bin" 4
+require_size "$BUILD_DIR/hifi_dynamic_default_branch.bin" 4
+require_size "$BUILD_DIR/hifi_dynamic_default_cave.bin" 86
 require_size "$BUILD_DIR/usb_output_gate_branch.bin" 4
 require_size "$BUILD_DIR/usb_output_gate_cave.bin" 140
 require_size "$BUILD_DIR/flinger_sync_patch.bin" 4
 require_size "$BUILD_DIR/usb_441_patch.bin" 4
 require_size "$BUILD_DIR/usb_3528_patch.bin" 4
-require_size "$BUILD_DIR/hifi_frame_count_cap_patch.bin" 24
+require_size "$BUILD_DIR/hifi_frame_count_stock.bin" 24
 require_size "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 16
 require_hex "$BUILD_DIR/select_output_branch.bin" 66b10114
 require_hex "$BUILD_DIR/hifi_app_branch.bin" 38bfff17
 require_hex "$BUILD_DIR/latest_max_final_stop_patch.bin" 78ffff17
 require_hex "$BUILD_DIR/latest_max_idle_rate_patch.bin" e822f8b4
+require_hex "$BUILD_DIR/hifi_dynamic_default_branch.bin" c3680114
 require_hex "$BUILD_DIR/usb_output_gate_branch.bin" d3160114
 require_hex "$BUILD_DIR/flinger_sync_patch.bin" 6a000014
 require_hex "$BUILD_DIR/usb_441_patch.bin" 44ac0000
 require_hex "$BUILD_DIR/usb_3528_patch.bin" 20620500
-require_hex "$BUILD_DIR/hifi_frame_count_cap_patch.bin" 087097521f00086b0030881a280380520008c81a09000014
+require_hex "$BUILD_DIR/hifi_frame_count_stock.bin" 087c409309058052097dc99bff0309ebc101005408c9208b
 require_hex "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 092184522925c81a090200361f2003d5
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/native_hifi_select_hook.elf" \
     | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate.elf" \
+    | grep -q 'There are no relocations'
+"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/hifi_dynamic_default.elf" \
     | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/qti_hifi_hal_patches.elf" \
     | grep -q 'There are no relocations'
@@ -143,6 +161,7 @@ grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.bin"
     | grep -q '^00000000000c3a8c .* latest_max_idle_rate$'
 python3 "$ROOT_DIR/tests/native_hifi_select_model.py"
 python3 "$ROOT_DIR/tests/usb_output_gate_model.py"
+python3 "$ROOT_DIR/tests/hifi_dynamic_default_model.py"
 
 MODULE_STAGE="$BUILD_DIR/module"
 mkdir -p "$MODULE_STAGE/patches" "$ROOT_DIR/dist"
@@ -150,7 +169,7 @@ cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
 cp "$BUILD_DIR"/*.bin "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.7.2-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.7.3-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'EXPECTED_FINGERPRINT=' "$MODULE_STAGE/customize.sh"
 grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
 grep -q 'Refusing an unsafe binary patch' "$MODULE_STAGE/customize.sh"

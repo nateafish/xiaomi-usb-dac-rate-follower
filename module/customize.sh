@@ -150,8 +150,9 @@ require_hex "$POLICY_SOURCE" 515992 16 \
     'sampling-rate sender post-context'
 require_hex "$POLICY_SOURCE" 800672 12 \
     1c5800940041201ed1ffff17 'native cave pre-context'
-require_hex "$POLICY_SOURCE" 801644 16 \
-    00000000000000000000000000000000 'reserved cave boundary'
+require_one_of_hex "$POLICY_SOURCE" 801644 16 \
+    '00000000000000000000000000000000 a90240f9e90100b42ac140392bc50091' \
+    'HIFI dynamic-default cave entry'
 require_hex "$POLICY_SOURCE" 864400 16 \
     42b0059160008052e1031faae3190094 \
     'LATEST_MAX final-stop pre-context'
@@ -164,6 +165,12 @@ require_hex "$POLICY_SOURCE" 865824 16 \
 require_hex "$POLICY_SOURCE" 865844 16 \
     098c41f8a90000b4e80309aa290540f9 \
     'LATEST_MAX active-rate post-context'
+require_hex "$POLICY_SOURCE" 432208 16 \
+    e00316aa02017eb203017db24dc60194 \
+    'dynamic profile picker pre-context'
+require_hex "$POLICY_SOURCE" 432228 16 \
+    e8cb41b9e9570391b6035ef8e00319aa \
+    'dynamic profile picker post-context'
 
 # SwAudioOutputCollection is 16-byte key/value items. The descriptor stores
 # its current DeviceVector at +0xe8 and DeviceDescriptor::type at +0x148.
@@ -196,6 +203,8 @@ require_one_of_hex "$POLICY_SOURCE" 864416 4 \
     'acffff17 78ffff17' 'LATEST_MAX final-stop update result'
 require_one_of_hex "$POLICY_SOURCE" 865840 4 \
     'a80100b4 e822f8b4' 'LATEST_MAX idle-rate branch'
+require_one_of_hex "$POLICY_SOURCE" 432224 4 \
+    'e0e340fd c3680114' 'HIFI dynamic default hook'
 require_one_of_hex "$FLINGER_SOURCE" 1772164 4 \
     '480d0054 6a000014' 'MixerThread HAL-rate synchronization'
 require_one_of_hex "$USB_SOURCE" 29024 4 \
@@ -255,11 +264,29 @@ else
     abort "! USB sender-gate executable cave is occupied or partially patched"
 fi
 
+HIFI_DEFAULT_CAVE_OFFSET=801644
+HIFI_DEFAULT_CAVE_CAPACITY=86
+if region_matches_file "$POLICY_SOURCE" "$HIFI_DEFAULT_CAVE_OFFSET" \
+        "$MODPATH/patches/hifi_dynamic_default_cave.bin"; then
+    hifi_default_cave_state=patched
+elif region_is_zero "$POLICY_SOURCE" "$HIFI_DEFAULT_CAVE_OFFSET" \
+        "$HIFI_DEFAULT_CAVE_CAPACITY"; then
+    hifi_default_cave_state=stock
+else
+    abort "! HIFI dynamic-default executable cave is occupied or partially patched"
+fi
+
 select_state=$(read_hex "$POLICY_SOURCE" 356884 4)
 app_state=$(read_hex "$POLICY_SOURCE" 867276 4)
 gate_state=$(read_hex "$POLICY_SOURCE" 515988 4)
 latest_stop_state=$(read_hex "$POLICY_SOURCE" 864416 4)
 idle_rate_state=$(read_hex "$POLICY_SOURCE" 865840 4)
+default_rate_state=$(read_hex "$POLICY_SOURCE" 432224 4)
+case "$default_rate_state:$hifi_default_cave_state" in
+    e0e340fd:stock) hifi_default_state=stock ;;
+    c3680114:patched) hifi_default_state=patched ;;
+    *) abort "! Refusing a mixed HIFI dynamic-default patch state" ;;
+esac
 flinger_state=$(read_hex "$FLINGER_SOURCE" 1772164 4)
 usb_state=$(read_hex "$USB_SOURCE" 29024 4):$(read_hex "$USB_SOURCE" 29052 4)
 case "$select_state:$app_state:$native_cave_state:$gate_state:$usb_gate_cave_state:$flinger_state:$usb_state:$latest_stop_state:$idle_rate_state" in
@@ -285,6 +312,7 @@ case "$hal_usecase_state:$hal_frame_state" in
 esac
 
 ui_print "- Structural state: $module_state"
+ui_print "- HIFI 48 kHz open state: $hifi_default_state"
 ui_print "- Qualcomm HIFI HAL state: $hal_state"
 ui_print "- AudioPolicyManager SHA-256: $(sha_of "$POLICY_SOURCE")"
 ui_print "- AudioFlinger SHA-256: $(sha_of "$FLINGER_SOURCE")"
@@ -318,12 +346,18 @@ if [ "$module_state" != v071 ]; then
     write_patch "$MODPATH/patches/latest_max_final_stop_patch.bin" "$POLICY_DEST" 864416
     write_patch "$MODPATH/patches/latest_max_idle_rate_patch.bin" "$POLICY_DEST" 865840
 fi
+if [ "$hifi_default_state" = stock ]; then
+    write_patch "$MODPATH/patches/hifi_dynamic_default_cave.bin" \
+        "$POLICY_DEST" "$HIFI_DEFAULT_CAVE_OFFSET"
+    write_patch "$MODPATH/patches/hifi_dynamic_default_branch.bin" \
+        "$POLICY_DEST" 432224
+fi
 if [ "$hal_state" = stock ]; then
     write_patch "$MODPATH/patches/hifi_usecase_reconfigure_patch.bin" \
         "$HAL_DEST" 2295956
 fi
-if [ "$hal_state" != v072 ]; then
-    write_patch "$MODPATH/patches/hifi_frame_count_cap_patch.bin" \
+if [ "$hal_state" = v072 ]; then
+    write_patch "$MODPATH/patches/hifi_frame_count_stock.bin" \
         "$HAL_DEST" 2595800
 fi
 
@@ -342,6 +376,8 @@ require_hex "$POLICY_DEST" 864416 4 78ffff17 \
     'patched LATEST_MAX final-stop update result'
 require_hex "$POLICY_DEST" 865840 4 e822f8b4 \
     'patched LATEST_MAX idle-rate branch'
+require_hex "$POLICY_DEST" 432224 4 c3680114 \
+    'patched HIFI 48 kHz dynamic default hook'
 region_matches_file "$POLICY_DEST" "$NATIVE_CAVE_OFFSET" \
     "$MODPATH/patches/native_hifi_cave.bin" \
     || abort "! Native HIFI cave verification failed"
@@ -350,6 +386,9 @@ region_is_zero "$POLICY_DEST" "$NATIVE_REMAINDER_OFFSET" "$NATIVE_REMAINDER_SIZE
 region_matches_file "$POLICY_DEST" "$USB_GATE_CAVE_OFFSET" \
     "$MODPATH/patches/usb_output_gate_cave.bin" \
     || abort "! USB sender-gate cave verification failed"
+region_matches_file "$POLICY_DEST" "$HIFI_DEFAULT_CAVE_OFFSET" \
+        "$MODPATH/patches/hifi_dynamic_default_cave.bin" \
+    || abort "! HIFI dynamic-default cave verification failed"
 require_hex "$FLINGER_DEST" 1772164 4 6a000014 'patched Mixer synchronization'
 require_hex "$USB_DEST" 29024 4 44ac0000 'patched USB 44.1 slot'
 require_hex "$USB_DEST" 29052 4 20620500 'preserved USB 352.8 slot'
@@ -357,8 +396,8 @@ require_hex "$HAL_DEST" 2295956 16 \
     092184522925c81a090200361f2003d5 \
     'patched HIFI PAL reconfiguration usecases'
 require_hex "$HAL_DEST" 2595800 24 \
-    087097521f00086b0030881a280380520008c81a09000014 \
-    'patched HIFI immutable FMQ frame-count cap'
+    087c409309058052097dc99bff0309ebc101005408c9208b \
+    'restored stock HIFI frame-count calculation'
 require_binary_string "$POLICY_DEST" com.apple.android.music 'patched package policy'
 require_binary_string "$POLICY_DEST" com.netease.cloudmusic 'patched package policy'
 
@@ -373,7 +412,8 @@ ui_print "- Route: native Xiaomi hifi_playback only when the selected route is U
 ui_print "- Rate: Xiaomi HifiSampleRateManager remains the sole start/stop controller"
 ui_print "- Idle: final HIFI release restores the shared USB backend to 48000 Hz"
 ui_print "- Mixer: synchronize 44.1/48 kHz changes from the accepted HAL rate"
-ui_print "- HAL: enable HIFI PAL reconfiguration and cap its immutable FMQ near 40 ms"
+ui_print "- Open: hifi_playback starts at PCM32 48 kHz with a native 1920-frame FMQ"
+ui_print "- HAL: enable HIFI PAL reconfiguration; preserve QTI's stock frame calculation"
 ui_print "- USB: expose 44.1 kHz inside Qualcomm's seven returned rates"
 ui_print "- Bluetooth, speaker, mixed, empty, and stale routes fail closed"
 ui_print "- No Preferred Mixer, Deep Buffer patch, XML edit, daemon, or Zygisk"

@@ -163,7 +163,7 @@ The v0.7.0 entry hook compares the profile first:
 This avoids the older full-function replacement that accidentally changed
 Deep Buffer and VoIP application policy too.
 
-## HAL reconfiguration, fixed FMQ size, and the 48 kHz boundary
+## HAL reconfiguration, dynamic-profile startup, and the 48 kHz boundary
 
 The HIFI manager sends the standard `sampling_rate` parameter to the selected
 output. Stock QTI admits only usecases 8 and 13 to the PAL connected-device
@@ -178,9 +178,23 @@ appeared to work on-device.
 AudioFlinger and the HAL create a 15360-frame / 122880-byte PCM32 FMQ. The later
 vendor parameter changes PAL media configuration but cannot resize that queue.
 A live 48 kHz dump still showed 15360 frames and roughly 448 ms thread-loop
-write latency. The v0.7.2 patch returns `min(rate, 48000) / 25`, giving 1764
-frames at 44.1 kHz and 1920 at 48 kHz and above. This keeps the in-place design
-while limiting the low-rate queue to about 40 ms.
+write latency.
+
+Changing only `getFrameCount()` is invalid. The resulting stream still declares
+384 kHz while its queue holds only 1920 frames, so AudioFlinger and QTI no
+longer agree on queue timing. The captured failure showed 184 FastMixer
+underruns, 305 overruns, about 168 ms write latency, and `localSR` near 153 kHz
+while the thread declared 384 kHz. Constant underruns produced severe pops.
+
+The correct point is earlier, in APM's dynamic-profile open sequence. On USB
+connection, `checkOutputsForDevice()` calls `openOutputWithProfileAndDevice()`
+with both mixer and HAL configurations null. APM probes the HAL, imports the
+dynamic profiles, calls `IOProfile::pickAudioProfile()`, and reopens with the
+chosen PCM32 stereo configuration. The generic picker selects 384 kHz here.
+Immediately after that picker, the exact profile pointer and selected
+`audio_config_t` are both live. Restricting only `hifi_playback` to a 48 kHz
+initial sample rate preserves its chosen format/channel mask and causes QTI's
+stock frame calculation to allocate 1920 frames naturally.
 
 AudioFlinger's local HIFI parameter path contains:
 
@@ -193,7 +207,12 @@ b.hi readOutputParameters_l
 The stock condition covers a high-rate transition such as 384 -> 96, but not a
 thread already at 44.1 or 48. The one-instruction patch makes this branch
 unconditional inside that existing HIFI synchronization path, allowing the
-MixerThread to adopt both 44.1 -> 48 and 48 -> 44.1 HAL changes.
+MixerThread to adopt both 44.1 -> 48 and 48 -> 44.1 HAL changes. The same path
+calls `PlaybackThread::readOutputParameters_l(true)`, constructs a new
+AudioMixer at the accepted output rate, and recreates the existing track mixer
+slots. Thus a single active source-rate track, MixerThread and PAL can converge
+after each native rate event; simultaneous tracks at different rates still
+require SRC by definition.
 
 ## Final transport safety gate
 

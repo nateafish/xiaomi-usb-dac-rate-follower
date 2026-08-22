@@ -1,12 +1,11 @@
-Xiaomi USB DAC Rate Follower v0.7.2-alpha
+Xiaomi USB DAC Rate Follower v0.7.3-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
 Android 17. The installer validates the fingerprint, ELF architecture, call
 sites, executable caves, and every object-layout offset used by the hook. A
 mixed, older, or partially patched source state is rejected before writing.
 
-This version removes the earlier Preferred Mixer, Deep Buffer, shared-arbiter,
-late-bootstrap, broad HAL, and XML experiments. It keeps a smaller native path:
+This build uses a native firmware-pinned path:
 
 1. AOSP runs Xiaomi's original selectOutput callback normally.
 2. For com.apple.android.music or com.netease.cloudmusic only, the final output
@@ -22,9 +21,11 @@ late-bootstrap, broad HAL, and XML experiments. It keeps a smaller native path:
    and duplicating routes fail closed.
 7. When Xiaomi's native LATEST_MAX HIFI count reaches zero, the same stop
    lifecycle restores the shared USB backend to the normal 48 kHz mixer rate.
-8. Qualcomm's HIFI usecase is admitted to the existing PAL reconfiguration
-   path, and its immutable AIDL FMQ is capped at 1764/1920 frames for low-rate
-   playback instead of retaining the 15360-frame 384 kHz startup buffer.
+8. The dynamic hifi_playback profile starts at PCM32/48 kHz. MixerThread, the
+   AIDL FMQ and PAL therefore agree at creation, and QTI's stock 40 ms frame
+   calculation naturally produces 1920 frames.
+9. Qualcomm's HIFI usecase is admitted to the existing PAL reconfiguration
+   path so later native rate events update PAL and AudioFlinger together.
 
 No output is opened or reopened by the selection hook. It allocates no object,
 creates no preference, adds no counter, and runs no daemon, polling loop,
@@ -35,10 +36,9 @@ following, not strict sample-bit identity. App DSP, effects, software volume,
 format conversion, and concurrent playback may still prevent bit-perfect data.
 
 Disabling NetEase crossfade does not disable AudioFlinger's protective fade
-when NetEase recreates its AudioTrack. The HAL frame-count correction targets
-the stale 320-348 ms HIFI buffer that amplified that normal transition into
-first-second swelling, missing attacks, and pops; it does not remove the safety
-fade itself.
+when NetEase recreates its AudioTrack. The coherent 48 kHz startup state avoids
+carrying a 384 kHz-sized queue into low-rate playback; it does not remove the
+safety fade itself.
 
 The idle restoration occurs when Android delivers the final native HIFI stop
 event. It does not forcibly migrate a client that remains active. NetEase also

@@ -79,4 +79,22 @@ cmp "$PATCHED_FLINGER" "$SECOND/system/lib64/libaudioflinger.so"
 cmp "$PATCHED_USB" "$SECOND/system/vendor/lib64/libdev_usb.so"
 cmp "$PATCHED_HAL" "$SECOND/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
-echo "host installer simulation: supported source install and v0.7.2 reinstall passed"
+V072_HAL="$TEST_ROOT/libaudiocorehal.v072.so"
+cp "$PATCHED_HAL" "$V072_HAL"
+printf '%s' 087097521f00086b0030881a280380520008c81a09000014 \
+    | xxd -r -p \
+    | dd of="$V072_HAL" bs=1 seek=2595800 conv=notrunc status=none
+V072_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v072.so"
+cp "$PATCHED_POLICY" "$V072_POLICY"
+printf '%s' e0e340fd \
+    | xxd -r -p \
+    | dd of="$V072_POLICY" bs=1 seek=432224 conv=notrunc status=none
+dd if=/dev/zero of="$V072_POLICY" bs=1 seek=801644 count=86 conv=notrunc status=none
+
+UPGRADE="$TEST_ROOT/upgrade"
+prepare_module "$UPGRADE" "$V072_POLICY" "$PATCHED_FLINGER" "$PATCHED_USB" "$V072_HAL"
+run_installer "$UPGRADE"
+cmp "$PATCHED_POLICY" "$UPGRADE/system/lib64/libaudiopolicymanagerdefault.so"
+cmp "$PATCHED_HAL" "$UPGRADE/system/vendor/lib64/hw/libaudiocorehal.qti.so"
+
+echo "host installer simulation: stock install, reapply, and v0.7.2 policy/HAL recovery passed"

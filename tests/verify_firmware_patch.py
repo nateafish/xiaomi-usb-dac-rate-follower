@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply v0.7.2 blobs to private stock captures and verify exact regions."""
+"""Apply v0.7.3 blobs to private stock captures and verify exact regions."""
 
 import sys
 import zipfile
@@ -14,12 +14,14 @@ POLICY_PATCHES = {
     "usb_output_gate_branch.bin": 515_988,
     "latest_max_final_stop_patch.bin": 864_416,
     "latest_max_idle_rate_patch.bin": 865_840,
+    "hifi_dynamic_default_branch.bin": 432_224,
+    "hifi_dynamic_default_cave.bin": 801_644,
 }
 FLINGER_PATCHES = {"flinger_sync_patch.bin": 1_772_164}
 USB_PATCHES = {"usb_441_patch.bin": 29_024, "usb_3528_patch.bin": 29_052}
 HAL_PATCHES = {
     "hifi_usecase_reconfigure_patch.bin": 2_295_956,
-    "hifi_frame_count_cap_patch.bin": 2_595_800,
+    "hifi_frame_count_stock.bin": 2_595_800,
 }
 
 
@@ -54,7 +56,8 @@ def main() -> None:
     require(policy, 515_988, "e20a0034", "stock sender entry")
     require(policy, 864_416, "acffff17", "stock final-stop result")
     require(policy, 865_840, "a80100b4", "stock idle-rate branch")
-    assert not any(policy[800_684:801_644]), "reserved policy cave is occupied"
+    require(policy, 432_224, "e0e340fd", "stock dynamic-profile continuation")
+    assert not any(policy[800_684:801_730]), "reserved policy cave is occupied"
     require(flinger, 1_772_164, "480d0054", "stock Mixer sync branch")
     require(usb, 29_024, "20620500", "stock USB 352.8 slot")
     require(usb, 29_052, "44ac0000", "stock USB 44.1 slot")
@@ -73,6 +76,7 @@ def main() -> None:
     with zipfile.ZipFile(archive_path) as archive:
         assert len(archive.read("patches/native_hifi_cave.bin")) == 744
         assert len(archive.read("patches/usb_output_gate_cave.bin")) == 140
+        assert len(archive.read("patches/hifi_dynamic_default_cave.bin")) == 86
         patched_policy = apply(policy, POLICY_PATCHES, archive)
         patched_flinger = apply(flinger, FLINGER_PATCHES, archive)
         patched_usb = apply(usb, USB_PATCHES, archive)
@@ -87,19 +91,21 @@ def main() -> None:
         require(patched_policy, 515_988, "d3160114", "patched sender hook")
         require(patched_policy, 864_416, "78ffff17", "patched final-stop result")
         require(patched_policy, 865_840, "e822f8b4", "patched idle-rate branch")
+        require(patched_policy, 432_224, "c3680114", "patched HIFI default hook")
         require(patched_flinger, 1_772_164, "6a000014", "patched Mixer sync")
         require(patched_usb, 29_024, "44ac0000", "patched USB 44.1 slot")
         require(patched_usb, 29_052, "20620500", "patched USB 352.8 slot")
         require(patched_hal, 2_295_956,
                 "092184522925c81a090200361f2003d5", "patched HIFI usecases")
         require(patched_hal, 2_595_800,
-                "087097521f00086b0030881a280380520008c81a09000014",
-                "patched HIFI frame-count cap")
+                "087c409309058052097dc99bff0309ebc101005408c9208b",
+                "stock HIFI frame-count calculation")
         assert b"hifi_playback" in patched_policy[800_684:801_419]
         assert b"com.apple.android.music" in patched_policy[800_684:801_419]
         assert b"com.netease.cloudmusic" in patched_policy[800_684:801_419]
         require(patched_policy, 801_420, "00709752c0035fd6", "48 kHz idle helper")
         assert not any(patched_policy[801_428:801_504])
+        assert b"hifi_playback" in patched_policy[801_644:801_730]
 
         # Exact reapplication is byte-idempotent.
         assert apply(patched_policy, POLICY_PATCHES, archive) == patched_policy
@@ -107,7 +113,7 @@ def main() -> None:
         assert apply(patched_usb, USB_PATCHES, archive) == patched_usb
         assert apply(patched_hal, HAL_PATCHES, archive) == patched_hal
 
-    print("firmware patch verification: stock -> v0.7.2 passed")
+    print("firmware patch verification: stock -> v0.7.3 passed")
 
 
 if __name__ == "__main__":
