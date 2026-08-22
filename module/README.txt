@@ -14,10 +14,9 @@ The module changes five narrow parts of Xiaomi's existing native Hifi path:
    Hifi sampling_rate change, including 48 kHz -> 44.1 kHz and the reverse.
 4. Qualcomm PAL's fixed seven-rate priority list includes 44.1 kHz instead of
    352.8 kHz, matching the DAC's verified native 44.1 kHz capability.
-5. Xiaomi's deep-buffer global-effect guard is bypassed before its existing
-   app allow check. Live evidence showed Dolby globally active while the USB
-   output itself had zero effect chains; stock therefore rejected a valid
-   44.1 kHz NetEase request before it reached the HAL.
+5. Xiaomi's deep-buffer guard accepts NONE(2) and stale UNKNOWN(3), while still
+   rejecting real Dolby(0) and MiSound(1). USB is declared `usb_device:none`,
+   but Feature 8 does not propagate it into the Hifi manager's separate field.
 
 The USB/HAL mixer remains PCM32. PCM16, PCM24, or Float submitted by an app is
 handled by normal AudioFlinger conversion. This build does not claim strict

@@ -33,7 +33,7 @@ Patched hashes:
 
 ```text
 libaudiopolicymanagerdefault.so
-34916265a7375e87db57125e3e603702a07335aed5f320ad61c58fa9c757b1b6
+5be0a369ec73ce27d531aa58de84b4cd292518dbdb92f9568d65340d853ba72a
 
 libaudioflinger.so
 66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
@@ -72,12 +72,13 @@ libdev_usb.so
     a second app playing concurrently.
 
 The v0.6.2 policy hash is
-`34916265a7375e87db57125e3e603702a07335aed5f320ad61c58fa9c757b1b6`.
+`5be0a369ec73ce27d531aa58de84b4cd292518dbdb92f9568d65340d853ba72a`.
 Its added four-byte patch changes the branch at file offset `0xd55b4`. A live
 v0.6.1 capture established the precondition: NetEase requested 44100 Hz,
 the USB profile advertised 44100 Hz, the USB MixerThread had zero effect
-chains, but Xiaomi stopped after observing its global Dolby state and sent no
-`sampling_rate=44100` request to the HAL.
+chains, and the USB device mapping declared `none`. Reverse engineering then
+showed that the Hifi manager can retain its constructor default `UNKNOWN(3)`
+and reject the event before sending `sampling_rate=44100` to the HAL.
 
 ## Pass criteria
 

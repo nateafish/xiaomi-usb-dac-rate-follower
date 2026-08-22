@@ -9,9 +9,9 @@ latest_max_patch:
 .p2align 2
 .global effect_gate_patch
 effect_gate_patch:
-    // b 0xd55e0 from 0xd55b4: continue to Xiaomi's existing app allow check
-    // even when a global Dolby/MiSound state is active.
-    .inst 0x1400000b
+    // b.hs 0xd55e0 from 0xd55b4: accept NONE(2) and UNKNOWN(3),
+    // while retaining Xiaomi's block for DOLBY(0) and MISOUND(1).
+    .inst 0x54000162
 
 .section .flinger_sync_patch, "a"
 .p2align 2

@@ -102,25 +102,32 @@ function's unconditional branch enables Xiaomi's original in-place update for
 the missing low-rate boundary. It avoids closing the output, returning
 `DEAD_OBJECT`, restoring AudioTracks, or duplicating Hifi reference counts.
 
-## Xiaomi's false global-effect gate
+## Xiaomi's disconnected effect state
 
 `HifiSampleRateManager::handlePlaybackEvent()` special-cases
-`deep_buffer_out`. If the manager's global `activeEffect` is not `none`, stock
-logs `deep_buffer with active effect, skipping sample rate management` and
-returns before its app allow check.
+`deep_buffer_out`. Its effect enum is Dolby=0, MiSound=1, None=2, Unknown=3.
+Stock continues only for exactly None=2; every other value logs
+`deep_buffer with active effect, skipping sample rate management` and returns
+before its app allow check.
 
-The v0.6.1 live capture proved this state is too broad for USB: NetEase's
+The v0.6.1 live capture proved the USB path itself was ready: NetEase's
 `TrackClientDescriptor` carried 44100 Hz, the dynamic USB profile contained
 44100 Hz, and AudioFlinger's USB `AudioOut_15` thread had zero effect chains.
-Nevertheless, a separate global `DAP_offload` Dolby state caused Xiaomi to
-skip the event, so no `sampling_rate=44100` reached QTI AIDL HAL/PAL.
+The device declaration is also unambiguous:
+`persist.audio.effect.device_map=...;usb_device:none`.
 
-At exact file offset `0xd55b4`, v0.6.2 changes the conditional branch to the
-same function's normal continuation at `0xd55e0`. That continuation still
-executes `isAppAllowed()`, whose replacement accepts only Apple Music and
-NetEase. The patch therefore removes no per-package restriction and adds no
-polling; it only prevents an unrelated global effect state from vetoing an
-effect-free USB output thread.
+The disconnect is inside policy. The Hifi manager constructor writes Unknown=3
+to its independent field at object offset `0x158`. `setProParameters()` can
+forward `activeEffect` to `onEffectChanged()`, but only when both Hifi Feature 6
+and Feature 8 are enabled. This firmware initializes the manager through
+Feature 6 while its configuration leaves Feature 8 disabled, so Unknown can
+remain stale even though the selected USB effect is None.
+
+At exact file offset `0xd55b4`, v0.6.2 changes `b.eq` to unsigned `b.hs`.
+The branch now accepts both None=2 and Unknown=3, while still rejecting
+Dolby=0 and MiSound=1. Its target remains the original continuation at
+`0xd55e0`, which executes `isAppAllowed()`; only Apple Music and NetEase pass.
+This is narrower than an unconditional bypass and adds no polling or daemon.
 
 ## Why the Qualcomm USB capability patch remains necessary
 

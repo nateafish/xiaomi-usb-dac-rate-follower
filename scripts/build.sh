@@ -54,7 +54,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 [[ $(wc -c < "$BUILD_DIR/usb_441_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/usb_3528_patch.bin") -eq 4 ]]
 [[ $(xxd -p "$BUILD_DIR/latest_max_patch.bin") == e3031f2a ]]
-[[ $(xxd -p "$BUILD_DIR/effect_gate_patch.bin") == 0b000014 ]]
+[[ $(xxd -p "$BUILD_DIR/effect_gate_patch.bin") == 62010054 ]]
 [[ $(xxd -p "$BUILD_DIR/flinger_sync_patch.bin") == 6a000014 ]]
 [[ $(xxd -p "$BUILD_DIR/usb_441_patch.bin") == 44ac0000 ]]
 [[ $(xxd -p "$BUILD_DIR/usb_3528_patch.bin") == 20620500 ]]

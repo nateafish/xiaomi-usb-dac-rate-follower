@@ -27,10 +27,11 @@ The stock implementation has three behaviors that explain the hardware traces:
 - the AudioFlinger synchronization branch runs only when the mixer's current
   rate is **above** 48 kHz. It therefore handles high-rate fallback but skips
   the exact 48 kHz ↔ 44.1 kHz boundary.
-- `deep_buffer_out` is rejected whenever Xiaomi's global effect state says
-  Dolby or MiSound is active. On the tested USB route, Dolby was globally
-  active while the USB MixerThread itself had zero effect chains, so a valid
-  NetEase 44.1 kHz request was discarded before any HAL update.
+- the USB route is correctly declared as original sound (`usb_device:none`),
+  but the Hifi manager initializes its separate `activeEffect` field to
+  `UNKNOWN(3)`. Feature 8 is disabled by this firmware's Hifi configuration,
+  so the field is not updated through `activeEffect` parameters. Stock accepts
+  only `NONE(2)` and can therefore reject an effect-free USB request.
 
 That second condition matches the observed baseline: rates above 48 kHz can
 work, while 44.1/48 kHz switching is probabilistic, stale, or speed-altering.
@@ -43,7 +44,7 @@ work, while 44.1/48 kHz switching is probabilistic, stale, or speed-altering.
 |---|---:|---:|---|
 | `libaudiopolicymanagerdefault.so` `0xd3bcc..0xd3c8f` | Xiaomi profile/app lookup | 196-byte selective check | Allow only Apple Music and NetEase |
 | same library `0xd42c4` | `ldr w3, [x24,#8]` | `mov w3, wzr` | Select `LATEST_MAX` instead of `FIRST_LOCK` |
-| same library `0xd55b4` | `b.eq 0xd55e0` | `b 0xd55e0` | Continue past the false global-effect gate to the existing app allow check |
+| same library `0xd55b4` | `b.eq 0xd55e0` | `b.hs 0xd55e0` | Accept `NONE(2)` and stale `UNKNOWN(3)` while still rejecting Dolby/MiSound |
 | `libaudioflinger.so` `0x1b0a84` | `b.hi 0x1b0c2c` | `b 0x1b0c2c` | Synchronize MixerThread for 44.1/48 kHz too |
 | `libdev_usb.so` `0x7160`, `0x717c` | 352.8 then 44.1 kHz | 44.1 then 352.8 kHz | Put 44.1 inside PAL's seven returned rates |
 
