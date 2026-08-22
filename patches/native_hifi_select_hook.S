@@ -16,6 +16,8 @@
 .extern SELECT_OUTPUT_RETURN
 .extern HIFI_APP_STOCK_CONTINUE
 .extern LATEST_MAX_TRUE_RETURN
+.extern LATEST_MAX_RATE_CONTINUE
+.extern LATEST_MAX_RATE_EMPTY_RETURN
 
 .section .select_output_branch, "ax"
 .p2align 2
@@ -42,9 +44,10 @@ latest_max_final_stop_patch:
 .p2align 2
 .global latest_max_idle_rate_patch
 latest_max_idle_rate_patch:
-    // Replaces only the empty-active-rate branch in getActiveSampleRate().
-    // Non-empty LATEST_MAX maps retain Xiaomi's original max-rate lookup.
-    cbz     x8, latest_max_idle_rate
+    // Xiaomi retains a synthetic 384 kHz rate node after the last real
+    // application stops, so testing only the active-rate tree is insufficient.
+    // Consult the existing application-count list before choosing an idle rate.
+    b       latest_max_idle_rate
 
 .section .native_hifi_cave, "ax"
 .p2align 2
@@ -267,5 +270,25 @@ native_hifi_app_filter:
 .p2align 2
 .global latest_max_idle_rate
 latest_max_idle_rate:
+    // Mirror areAllApplicationsStopped(): the intrusive list at +0x50 may
+    // contain zero-count nodes, so scan until a real application count is
+    // found.  x8 still contains the active-rate tree size loaded by the
+    // displaced instruction immediately before the hook.
+    ldr     x9, [x0, #0x50]
+.Lidle_application_loop:
+    cbz     x9, .Lidle_return_48
+    ldr     w10, [x9, #0x14]
+    cmp     w10, #1
+    b.ge    .Lidle_stock_rate
+    ldr     x9, [x9]
+    b       .Lidle_application_loop
+
+.Lidle_stock_rate:
+    // A real application is still active: preserve Xiaomi's original
+    // LATEST_MAX lookup, including its stock empty-tree fallback.
+    cbz     x8, LATEST_MAX_RATE_EMPTY_RETURN
+    b       LATEST_MAX_RATE_CONTINUE
+
+.Lidle_return_48:
     mov     w0, #48000
     ret

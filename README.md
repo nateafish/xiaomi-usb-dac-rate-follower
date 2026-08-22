@@ -46,8 +46,9 @@ Zygisk 或应用内 Hook。
    配置设为 PCM32/48 kHz。MixerThread、AIDL FMQ 与 PAL 因而从同一个
    48 kHz 状态创建，QTI 原生 40 ms 计算会得到 1920 帧；后续切换继续由
    小米原生链路统一更新 Mixer 与 HAL。
-6. 最后一个 HIFI 音轨释放后，通过小米原生生命周期将共享 USB 后端恢复
-   至普通应用使用的 48 kHz。
+6. 最后一个 HIFI 音轨释放后，以小米自己的应用计数为准，忽略仍残留在
+   LATEST_MAX 树中的合成 384 kHz 节点，将共享 USB 后端恢复至普通应用
+   使用的 48 kHz。
 
 所有运行时扫描都有固定上限。遇到空路由、未知设备、过期输出、混合路由
 或异常对象时，模块保持系统原选择，不发送采样率命令。
@@ -161,8 +162,9 @@ firmware is rejected.
    opened as PCM32/48 kHz. MixerThread, the AIDL FMQ and PAL therefore start
    from one coherent state, and QTI's stock 40 ms calculation creates 1920
    frames. Xiaomi's native path updates Mixer and HAL together afterward.
-6. When the final HIFI track is released, Xiaomi's native lifecycle restores
-   the shared USB backend to the normal 48 kHz mixer rate.
+6. When the final HIFI track is released, Xiaomi's own application count is
+   authoritative. A retained synthetic 384 kHz LATEST_MAX node is ignored and
+   the shared USB backend returns to the normal 48 kHz mixer rate.
 
 All runtime scans are bounded. Empty, stale, unknown, mixed or non-USB routes
 fail closed and keep the system's original output decision.

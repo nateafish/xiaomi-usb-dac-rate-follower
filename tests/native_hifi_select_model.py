@@ -32,6 +32,13 @@ def select(package: str, selected: int, outputs: list[Output]) -> int:
     return selected
 
 
+def latest_max_rate(application_counts: list[int], retained_rates: list[int]) -> int:
+    """Model the native idle gate before Xiaomi's retained rate-tree lookup."""
+    if not any(count >= 1 for count in application_counts):
+        return 48_000
+    return max(retained_rates) if retained_rates else 48_000
+
+
 def main() -> None:
     deep_usb = Output(21, "deep_buffer_out", (0x04000000,))
     hifi_usb = Output(117, "hifi_playback", (0x04000000,))
@@ -55,7 +62,14 @@ def main() -> None:
     assert select("com.netease.cloudmusic", 21, []) == 21
     assert select("com.netease.cloudmusic", 21, [deep_usb] * 65) == 21
 
-    print("native HIFI selection model: 12 routing and fail-closed cases passed")
+    # Xiaomi can retain a synthetic 384 kHz rate node after every real app has
+    # stopped.  Application counts, not rate-tree occupancy, define idle.
+    assert latest_max_rate([], [384_000]) == 48_000
+    assert latest_max_rate([0, 0], [384_000]) == 48_000
+    assert latest_max_rate([1], [44_100, 384_000]) == 384_000
+    assert latest_max_rate([1], [44_100, 96_000]) == 96_000
+
+    print("native HIFI selection and idle model: 16 cases passed")
 
 
 if __name__ == "__main__":

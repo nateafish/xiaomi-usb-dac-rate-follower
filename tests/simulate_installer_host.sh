@@ -79,6 +79,21 @@ cmp "$PATCHED_FLINGER" "$SECOND/system/lib64/libaudioflinger.so"
 cmp "$PATCHED_USB" "$SECOND/system/vendor/lib64/libdev_usb.so"
 cmp "$PATCHED_HAL" "$SECOND/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
+V073_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v073.so"
+cp "$PATCHED_POLICY" "$V073_POLICY"
+printf '%s' e822f8b4 \
+    | xxd -r -p \
+    | dd of="$V073_POLICY" bs=1 seek=865840 conv=notrunc status=none
+printf '%s' 00709752c0035fd6 \
+    | xxd -r -p \
+    | dd of="$V073_POLICY" bs=1 seek=801420 conv=notrunc status=none
+dd if=/dev/zero of="$V073_POLICY" bs=1 seek=801428 count=36 conv=notrunc status=none
+
+V073_UPGRADE="$TEST_ROOT/v073-upgrade"
+prepare_module "$V073_UPGRADE" "$V073_POLICY" "$PATCHED_FLINGER" "$PATCHED_USB" "$PATCHED_HAL"
+run_installer "$V073_UPGRADE"
+cmp "$PATCHED_POLICY" "$V073_UPGRADE/system/lib64/libaudiopolicymanagerdefault.so"
+
 V072_HAL="$TEST_ROOT/libaudiocorehal.v072.so"
 cp "$PATCHED_HAL" "$V072_HAL"
 printf '%s' 087097521f00086b0030881a280380520008c81a09000014 \
@@ -86,6 +101,13 @@ printf '%s' 087097521f00086b0030881a280380520008c81a09000014 \
     | dd of="$V072_HAL" bs=1 seek=2595800 conv=notrunc status=none
 V072_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v072.so"
 cp "$PATCHED_POLICY" "$V072_POLICY"
+printf '%s' e822f8b4 \
+    | xxd -r -p \
+    | dd of="$V072_POLICY" bs=1 seek=865840 conv=notrunc status=none
+printf '%s' 00709752c0035fd6 \
+    | xxd -r -p \
+    | dd of="$V072_POLICY" bs=1 seek=801420 conv=notrunc status=none
+dd if=/dev/zero of="$V072_POLICY" bs=1 seek=801428 count=36 conv=notrunc status=none
 printf '%s' e0e340fd \
     | xxd -r -p \
     | dd of="$V072_POLICY" bs=1 seek=432224 conv=notrunc status=none
@@ -97,4 +119,4 @@ run_installer "$UPGRADE"
 cmp "$PATCHED_POLICY" "$UPGRADE/system/lib64/libaudiopolicymanagerdefault.so"
 cmp "$PATCHED_HAL" "$UPGRADE/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
-echo "host installer simulation: stock install, reapply, and v0.7.2 policy/HAL recovery passed"
+echo "host installer simulation: stock, reapply, v0.7.3 upgrade, and v0.7.2 recovery passed"

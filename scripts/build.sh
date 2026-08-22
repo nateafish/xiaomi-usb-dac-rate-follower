@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.7.3-alpha
+VERSION=0.7.4-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -61,6 +61,8 @@ require_hex() {
     --defsym=SELECT_OUTPUT_RETURN=0x57218 \
     --defsym=HIFI_APP_STOCK_CONTINUE=0xd3bd0 \
     --defsym=LATEST_MAX_TRUE_RETURN=0xd2e80 \
+    --defsym=LATEST_MAX_RATE_CONTINUE=0xd3634 \
+    --defsym=LATEST_MAX_RATE_EMPTY_RETURN=0xd3664 \
     "$BUILD_DIR/native_hifi_select_hook.o" \
     -o "$BUILD_DIR/native_hifi_select_hook.elf"
 "$LLVM_BIN/llvm-objcopy" \
@@ -123,7 +125,7 @@ require_hex() {
 
 require_size "$BUILD_DIR/select_output_branch.bin" 4
 require_size "$BUILD_DIR/hifi_app_branch.bin" 4
-require_size "$BUILD_DIR/native_hifi_cave.bin" 744
+require_size "$BUILD_DIR/native_hifi_cave.bin" 780
 require_size "$BUILD_DIR/latest_max_final_stop_patch.bin" 4
 require_size "$BUILD_DIR/latest_max_idle_rate_patch.bin" 4
 require_size "$BUILD_DIR/hifi_dynamic_default_branch.bin" 4
@@ -138,7 +140,7 @@ require_size "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 16
 require_hex "$BUILD_DIR/select_output_branch.bin" 66b10114
 require_hex "$BUILD_DIR/hifi_app_branch.bin" 38bfff17
 require_hex "$BUILD_DIR/latest_max_final_stop_patch.bin" 78ffff17
-require_hex "$BUILD_DIR/latest_max_idle_rate_patch.bin" e822f8b4
+require_hex "$BUILD_DIR/latest_max_idle_rate_patch.bin" 17c1ff17
 require_hex "$BUILD_DIR/hifi_dynamic_default_branch.bin" c3680114
 require_hex "$BUILD_DIR/usb_output_gate_branch.bin" d3160114
 require_hex "$BUILD_DIR/flinger_sync_patch.bin" 6a000014
@@ -169,7 +171,7 @@ cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
 cp "$BUILD_DIR"/*.bin "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.7.3-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.7.4-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'EXPECTED_FINGERPRINT=' "$MODULE_STAGE/customize.sh"
 grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
 grep -q 'Refusing an unsafe binary patch' "$MODULE_STAGE/customize.sh"

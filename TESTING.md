@@ -1,6 +1,6 @@
 # Controlled test plan
 
-`0.7.3-alpha` must pass offline verification before any device installation.
+`0.7.4-alpha` must pass offline verification before any device installation.
 Do not live-replace audio libraries or restart audioserver manually.
 
 ## Offline gate
@@ -26,7 +26,7 @@ python3 tests/verify_firmware_patch.py \
   libaudiocorehal.qti.so \
   libaudiopolicycomponents.so \
   libaudiopolicymanagerimpl.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.7.3-alpha.zip
+  dist/xiaomi-usb-dac-rate-follower-v0.7.4-alpha.zip
 ```
 
 ## Installation gate
@@ -73,6 +73,7 @@ NetEase and Apple Music, test each transition at least five times:
 | 96 -> 44.1 | 44.1 |
 | 48 -> 96 -> 48 | 48 -> 96 -> 48 |
 | full stop, then 44.1 | 44.1 on the new start |
+| full stop, then ordinary 48 kHz app | idle/backend 48, then 48 |
 
 For every boundary, capture all four observations:
 
@@ -120,9 +121,11 @@ release pass, these sequences:
 - another app 48 is already active, then target 44.1 starts;
 - target app switches while a notification/system sound occurs.
 
-The logs are needed to identify a native migration/lifecycle point. Do not add
-a daemon or restore the rejected HIFI/Deep shared counter merely to force the
-expected display.
+The final HIFI stop must log a 48 kHz hardware update even if Xiaomi's
+LATEST_MAX rate tree retains its synthetic 384 kHz node. A subsequent ordinary
+48 kHz app must never expose a 48 kHz MixerThread feeding a 384 kHz USB sink.
+Do not add a daemon or restore the rejected HIFI/Deep shared counter merely to
+force the expected display.
 
 ## Success criteria
 

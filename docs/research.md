@@ -214,6 +214,23 @@ slots. Thus a single active source-rate track, MixerThread and PAL can converge
 after each native rate event; simultaneous tracks at different rates still
 require SRC by definition.
 
+## Idle 384 kHz retention
+
+Live `0.7.3-alpha` logs exposed a separate Xiaomi lifecycle defect. After the
+last real HIFI application stopped, `updateLatestMaxStrategy()` correctly
+reported that all applications were stopped, but `getActiveSampleRate()` still
+returned 384 kHz from a retained synthetic/default rate-tree node. The manager
+then sent `sampling_rate=384000` to the idle HIFI output. An ordinary 48 kHz
+Deep Buffer client could consequently appear as a 48 kHz Mixer source attached
+to a temporarily 384 kHz USB sink.
+
+The idle gate therefore mirrors Xiaomi's existing
+`areAllApplicationsStopped()` semantics: it scans the native application-count
+list at `ProfileManager + 0x50`. If no node has a positive count it returns
+48 kHz, regardless of retained rate-tree nodes. If a real application remains,
+the original LATEST_MAX tree lookup runs unchanged. This adds no counter,
+polling or cross-profile ownership state.
+
 ## Final transport safety gate
 
 `sendkeySamplingRateToAHal(output, rate)` otherwise trusts the output handle.

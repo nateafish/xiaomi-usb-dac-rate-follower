@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.7.3-alpha
+Xiaomi USB DAC Rate Follower v0.7.4-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
 Android 17. The installer validates the fingerprint, ELF architecture, call
@@ -19,8 +19,9 @@ This build uses a native firmware-pinned path:
 6. The final sampling_rate sender permits writes only when every device routed
    on that exact output is USB. Bluetooth, speaker, wired, mixed, empty, stale,
    and duplicating routes fail closed.
-7. When Xiaomi's native LATEST_MAX HIFI count reaches zero, the same stop
-   lifecycle restores the shared USB backend to the normal 48 kHz mixer rate.
+7. When Xiaomi's native application count reaches zero, the same stop
+   lifecycle ignores its retained synthetic 384 kHz rate node and restores the
+   shared USB backend to the normal 48 kHz mixer rate.
 8. The dynamic hifi_playback profile starts at PCM32/48 kHz. MixerThread, the
    AIDL FMQ and PAL therefore agree at creation, and QTI's stock 40 ms frame
    calculation naturally produces 1920 frames.
