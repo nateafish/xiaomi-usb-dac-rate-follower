@@ -1,6 +1,6 @@
 id=xiaomi-usb-dac-rate-follower
 name=Xiaomi USB DAC Rate Follower
-version=0.6.0-alpha
-versionCode=13
+version=0.6.1-alpha
+versionCode=14
 author=nateafish
-description=Firmware-pinned Xiaomi native Hifi rate-following fix for Apple Music and NetEase. No daemon, Zygisk, XML, or vendor HAL replacement. Experimental.
+description=Firmware-pinned Xiaomi native Hifi rate-following and USB 44.1 kHz capability fix for Apple Music and NetEase. No daemon, Zygisk, or XML. Experimental.

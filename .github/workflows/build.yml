@@ -32,10 +32,10 @@ jobs:
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomi-usb-dac-rate-follower-v0.6.0-alpha
+          name: xiaomi-usb-dac-rate-follower-v0.6.1-alpha
           path: |
-            dist/xiaomi-usb-dac-rate-follower-v0.6.0-alpha.zip
-            dist/xiaomi-usb-dac-rate-follower-v0.6.0-alpha.zip.sha256
+            dist/xiaomi-usb-dac-rate-follower-v0.6.1-alpha.zip
+            dist/xiaomi-usb-dac-rate-follower-v0.6.1-alpha.zip.sha256
           if-no-files-found: error
           retention-days: 90
 
@@ -46,8 +46,8 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/xiaomi-usb-dac-rate-follower-v0.6.0-alpha.zip#Magisk and KernelSU module" \
-            "dist/xiaomi-usb-dac-rate-follower-v0.6.0-alpha.zip.sha256#SHA-256 checksum" \
-            --title "Xiaomi USB DAC Rate Follower v0.6.0 Alpha" \
+            "dist/xiaomi-usb-dac-rate-follower-v0.6.1-alpha.zip#Magisk and KernelSU module" \
+            "dist/xiaomi-usb-dac-rate-follower-v0.6.1-alpha.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi USB DAC Rate Follower v0.6.1 Alpha" \
             --prerelease \
-            --notes "Exact-firmware experimental build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM. It repairs Xiaomi's native Hifi rate lifecycle for Apple Music and NetEase: selective whitelist, LATEST_MAX overlap handling, and AudioFlinger in-place MixerThread synchronization below and above 48 kHz. No daemon, Zygisk, XML, preferred-mixer writer, or vendor HAL replacement. KernelSU requires a metamodule. Hardware transition testing is still required."
+            --notes "Exact-firmware experimental build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM. It repairs Xiaomi's native Hifi rate lifecycle for Apple Music and NetEase: selective whitelist, LATEST_MAX overlap handling, AudioFlinger in-place MixerThread synchronization below and above 48 kHz, and the verified Qualcomm seven-rate 44.1 kHz capability swap. No daemon, Zygisk, XML, or preferred-mixer writer. KernelSU requires a metamodule. Hardware transition testing is still required."

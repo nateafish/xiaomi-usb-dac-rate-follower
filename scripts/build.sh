@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.6.0-alpha
+VERSION=0.6.1-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -42,13 +42,19 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .latest_max_patch="$BUILD_DIR/latest_max_patch.bin" \
     --dump-section .flinger_sync_patch="$BUILD_DIR/flinger_sync_patch.bin" \
+    --dump-section .usb_441_patch="$BUILD_DIR/usb_441_patch.bin" \
+    --dump-section .usb_3528_patch="$BUILD_DIR/usb_3528_patch.bin" \
     "$BUILD_DIR/instruction_patches.o"
 
 [[ $(wc -c < "$BUILD_DIR/is_app_allowed_hook.bin") -eq 196 ]]
 [[ $(wc -c < "$BUILD_DIR/latest_max_patch.bin") -eq 4 ]]
 [[ $(wc -c < "$BUILD_DIR/flinger_sync_patch.bin") -eq 4 ]]
+[[ $(wc -c < "$BUILD_DIR/usb_441_patch.bin") -eq 4 ]]
+[[ $(wc -c < "$BUILD_DIR/usb_3528_patch.bin") -eq 4 ]]
 [[ $(xxd -p "$BUILD_DIR/latest_max_patch.bin") == e3031f2a ]]
 [[ $(xxd -p "$BUILD_DIR/flinger_sync_patch.bin") == 6a000014 ]]
+[[ $(xxd -p "$BUILD_DIR/usb_441_patch.bin") == 44ac0000 ]]
+[[ $(xxd -p "$BUILD_DIR/usb_3528_patch.bin") == 20620500 ]]
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/is_app_allowed_hook.elf" \
     | grep -q 'There are no relocations'
 grep -a -q 'com.apple.android.music' "$BUILD_DIR/is_app_allowed_hook.bin"
@@ -60,11 +66,14 @@ cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
 cp "$BUILD_DIR/is_app_allowed_hook.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/latest_max_patch.bin" "$MODULE_STAGE/patches/"
 cp "$BUILD_DIR/flinger_sync_patch.bin" "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR/usb_441_patch.bin" "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR/usb_3528_patch.bin" "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.6.0-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.6.1-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'POLICY_STOCK_SHA256=e0bd4444' "$MODULE_STAGE/customize.sh"
 grep -q 'FLINGER_STOCK_SHA256=d499d92e' "$MODULE_STAGE/customize.sh"
+grep -q 'USB_STOCK_SHA256=d36085db' "$MODULE_STAGE/customize.sh"
 [[ ! -e "$MODULE_STAGE/post-fs-data.sh" ]]
 [[ ! -e "$MODULE_STAGE/service.sh" ]]
 [[ ! -e "$MODULE_STAGE/mount-audio.sh" ]]
@@ -81,7 +90,7 @@ find "$MODULE_STAGE" -exec touch -t 202601010000 {} +
 rm -f "$ROOT_DIR/dist/$OUTPUT_NAME" "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"
 (
     cd "$MODULE_STAGE"
-    zip -X -q -r "$ROOT_DIR/dist/$OUTPUT_NAME" .
+    find . -type f -print | LC_ALL=C sort | zip -X -q "$ROOT_DIR/dist/$OUTPUT_NAME" -@
 )
 (
     cd "$ROOT_DIR/dist"

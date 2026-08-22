@@ -3,10 +3,10 @@
 Firmware-pinned Magisk/KernelSU research module for Xiaomi 17 Ultra (`nezha`),
 Android 17 / API 37, OS `4.0.0.15.XPACNXM`.
 
-Version `0.6.0-alpha` repairs Xiaomi's existing native Hifi sample-rate path
+Version `0.6.1-alpha` repairs Xiaomi's existing native Hifi sample-rate path
 instead of building a second controller around it. It contains no daemon,
-Zygisk hook, app modification, XML override, preferred-mixer writer, vendor HAL
-replacement, polling loop, or live audioserver restart.
+Zygisk hook, app modification, XML override, preferred-mixer writer, polling
+loop, or live audioserver restart.
 
 ## Root cause
 
@@ -31,15 +31,16 @@ The stock implementation has two behaviors that explain the hardware traces:
 That second condition matches the observed baseline: rates above 48 kHz can
 work, while 44.1/48 kHz switching is probabilistic, stale, or speed-altering.
 
-## The three patches
+## The guarded patch set
 
-`0.6.0-alpha` changes only these firmware addresses:
+`0.6.1-alpha` changes only these firmware addresses:
 
 | Library / offset | Stock | Patched | Purpose |
 |---|---:|---:|---|
 | `libaudiopolicymanagerdefault.so` `0xd3bcc..0xd3c8f` | Xiaomi profile/app lookup | 196-byte selective check | Allow only Apple Music and NetEase |
 | same library `0xd42c4` | `ldr w3, [x24,#8]` | `mov w3, wzr` | Select `LATEST_MAX` instead of `FIRST_LOCK` |
 | `libaudioflinger.so` `0x1b0a84` | `b.hi 0x1b0c2c` | `b 0x1b0c2c` | Synchronize MixerThread for 44.1/48 kHz too |
+| `libdev_usb.so` `0x7160`, `0x717c` | 352.8 then 44.1 kHz | 44.1 then 352.8 kHz | Put 44.1 inside PAL's seven returned rates |
 
 The whitelist is exactly:
 
@@ -60,12 +61,12 @@ conversion, or another processing stage changes samples.
 
 ## Firmware and mount safety
 
-The ZIP does not redistribute Xiaomi system libraries. During installation it:
+The ZIP does not redistribute Xiaomi system/vendor libraries. During installation it:
 
 1. requires the exact fingerprint documented above;
-2. verifies SHA-256 of both stock libraries;
+2. verifies SHA-256 of all three stock libraries;
 3. copies them into the module's systemless overlay;
-4. applies 196 + 4 + 4 bytes of guarded patches;
+4. applies 196 + 4 + 4 + 4 + 4 bytes of guarded patches;
 5. verifies the complete patched-library SHA-256 before installation succeeds.
 
 KernelSU requires an active metamodule such as official `meta-overlayfs`. There

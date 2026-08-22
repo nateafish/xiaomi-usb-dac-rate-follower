@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.6.0-alpha
+Xiaomi USB DAC Rate Follower v0.6.1-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
 Android 17. The installer verifies the build fingerprint and SHA-256 of both
@@ -12,13 +12,16 @@ The module changes three narrow parts of Xiaomi's existing native Hifi path:
    old/new song AudioTracks do not permanently pin the first song's rate.
 3. AudioFlinger synchronizes MixerThread from the HAL after every accepted
    Hifi sampling_rate change, including 48 kHz -> 44.1 kHz and the reverse.
+4. Qualcomm PAL's fixed seven-rate priority list includes 44.1 kHz instead of
+   352.8 kHz, matching the DAC's verified native 44.1 kHz capability.
 
 The USB/HAL mixer remains PCM32. PCM16, PCM24, or Float submitted by an app is
 handled by normal AudioFlinger conversion. This build does not claim strict
 bit identity when the app, effects, volume, or format conversion changes data.
 
 There is no daemon, Zygisk injection, app patch, preferred-mixer writer, XML
-edit, vendor HAL replacement, polling, or live audioserver restart.
+edit, polling, or live audioserver restart. The ZIP ships only tiny patch blobs,
+not Xiaomi's complete system or vendor libraries.
 
 KernelSU requires an active metamodule such as official meta-overlayfs. The
 module contains no manual bind-mount fallback. Magisk uses its standard

@@ -19,7 +19,7 @@ QTI AIDL HAL / PAL changes the USB backend
 AudioFlinger MixerThread must read back and adopt the HAL rate
 ```
 
-The v0.6 design repairs this existing chain. It does not create a second state
+The v0.6.1 design repairs this existing chain. It does not create a second state
 machine or repeatedly inspect playback from userspace.
 
 ## Where configuration lives
@@ -102,10 +102,28 @@ function's unconditional branch enables Xiaomi's original in-place update for
 the missing low-rate boundary. It avoids closing the output, returning
 `DEAD_OBJECT`, restoring AudioTracks, or duplicating Hifi reference counts.
 
+## Why the Qualcomm USB capability patch remains necessary
+
+The DAC descriptor and ALSA endpoint advertise native 44.1 kHz, but QTI PAL's
+dynamic capability ABI returns only seven rates plus a zero terminator. On this
+firmware, 44.1 kHz is the eighth matching priority and disappears from the AIDL
+USB profile. A clean v0.6 boot without the vendor micro-patch confirmed that
+AudioPolicy exposed only `48000, 88200, 96000, 176400, 192000, 352800, 384000`.
+
+The guarded `libdev_usb.so` patch swaps two uint32 priorities:
+
+```text
+0x7160: 352800 -> 44100
+0x717c:  44100 -> 352800
+```
+
+This preserves the seven-entry ABI and makes the framework/Hifi manager see
+44.1 kHz. It does not fill the zero terminator or scan beyond the array.
+
 ## Selective package handling
 
 The exported `HifiSampleRateManager::isAppAllowed(profile, app)` thunk has one
-direct internal implementation. v0.6 replaces that implementation with a
+direct internal implementation. v0.6.1 replaces that implementation with a
 196-byte PAC-compatible function that:
 
 - preserves the stock prologue and epilogue addresses for unwind compatibility;
@@ -146,6 +164,6 @@ feature gates and 48 kHz condition are vendor modifications.
 
 KernelSU 3+ delegates system overlays to one active metamodule. The test phone
 now uses official `meta-overlayfs 1.3.1`; `/data/adb/metamodule` points to it and
-its ext4 content image mounts successfully. v0.6 intentionally refuses a
+its ext4 content image mounts successfully. v0.6.1 intentionally refuses a
 KernelSU installation without an active metamodule and contains no custom bind
 fallback.

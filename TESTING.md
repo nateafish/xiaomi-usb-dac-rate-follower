@@ -24,6 +24,9 @@ e0bd4444461df3608f2baa05d4f5db22d0d5ddfb23cabb36474ff5f5c22da3cb
 
 libaudioflinger.so
 d499d92e115dac7ee8e7e5dcbd53079e6a61ffccbe6d34481f239813e1f3695f
+
+libdev_usb.so
+d36085dbf0e4f7979ee6b94540b216d949d0f74ab0cda385fdfd5cfc8cd0c296
 ```
 
 Patched hashes:
@@ -34,6 +37,9 @@ libaudiopolicymanagerdefault.so
 
 libaudioflinger.so
 66ce065150b8d1e7cb056a7fbc6040563c9e8ef87c3068dd40dc5e876d9e95e6
+
+libdev_usb.so
+04cb4f2a7f4f4247995eb098b7d9a6ba8aeb6ff131144e87a6730d8a9ee4dad6
 ```
 
 ## Safety rules
@@ -46,11 +52,11 @@ libaudioflinger.so
 
 ## Phased test
 
-1. With the old module disabled, verify both stock hashes and a working USB DAC.
-2. Install `v0.6.0-alpha`; the installer must report exact fingerprint/hash
+1. With the old module disabled, verify all three stock hashes and a working USB DAC.
+2. Install `v0.6.1-alpha`; the installer must report exact fingerprint/hash
    acceptance and metamodule availability. Reboot normally.
-3. Before opening a player, verify both patched hashes are visible through
-   `/system/lib64` and audioserver is stable.
+3. Before opening a player, verify all three patched hashes, confirm 44.1 kHz
+   appears in the USB dynamic profile, and confirm audioserver is stable.
 4. Open NetEase from a fresh process and play a known 44.1 kHz WAV. Verify the
    DAC, AudioFlinger MixerThread, HAL, and ALSA rates all become 44.1 kHz.
 5. Force-stop NetEase. Reopen it and play a 48 kHz WAV. Require all four layers

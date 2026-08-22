@@ -11,3 +11,17 @@ latest_max_patch:
 flinger_sync_patch:
     // b 0x1b0c2c from 0x1b0a84: readOutputParameters_l(true)
     .inst 0x1400006a
+
+.section .usb_441_patch, "a"
+.p2align 2
+.global usb_441_patch
+usb_441_patch:
+    // 44100, little-endian uint32_t: replace 352800 at libdev_usb+0x7160.
+    .long 44100
+
+.section .usb_3528_patch, "a"
+.p2align 2
+.global usb_3528_patch
+usb_3528_patch:
+    // 352800: replace the later 44100 priority entry at libdev_usb+0x717c.
+    .long 352800
