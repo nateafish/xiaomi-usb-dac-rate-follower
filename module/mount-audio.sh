@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 MODDIR=${0%/*}
-LOGDIR=/data/adb/xiaomi17-bitperfect
+LOGDIR=/data/adb/xiaomi-usb-dac-rate-follower
 LOGFILE=$LOGDIR/mount.log
 PATCHED_SHA256=04cb4f2a7f4f4247995eb098b7d9a6ba8aeb6ff131144e87a6730d8a9ee4dad6
 
@@ -52,9 +52,14 @@ if [ "$actual_sha256" != "$PATCHED_SHA256" ]; then
     log_mount "verification failed: libdev_usb.so sha256=$actual_sha256"
     exit 1
 fi
-if ! grep -A4 'name="deep_buffer_out"' \
-        /odm/etc/audio/audio_module_config_primary.xml | grep -q '44100 48000'; then
-    log_mount "verification failed: ODM deep_buffer_out 44.1 kHz profile missing"
+if ! grep -q 'name="hifi_playback" role="source" flags="BIT_PERFECT"' \
+        /vendor/etc/audio/audio_module_config_primary.xml; then
+    log_mount "verification failed: vendor hifi_playback BIT_PERFECT missing"
+    exit 1
+fi
+if ! grep -q 'name="hifi_playback" role="source" flags="BIT_PERFECT"' \
+        /odm/etc/audio/audio_module_config_primary.xml; then
+    log_mount "verification failed: ODM hifi_playback BIT_PERFECT missing"
     exit 1
 fi
 

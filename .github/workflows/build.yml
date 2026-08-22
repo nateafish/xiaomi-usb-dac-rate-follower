@@ -20,17 +20,22 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v5
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools ndk;29.0.14206865"
+
       - name: Build and verify module
         shell: bash
-        run: bash scripts/build.sh
+        run: ANDROID_NDK_HOME="$ANDROID_HOME/ndk/29.0.14206865" bash scripts/build.sh
 
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomi17-bitperfect-v0.3.1-alpha
+          name: xiaomi-usb-dac-rate-follower-v0.5.0-alpha
           path: |
-            dist/xiaomi17-bitperfect-v0.3.1-alpha.zip
-            dist/xiaomi17-bitperfect-v0.3.1-alpha.zip.sha256
+            dist/xiaomi-usb-dac-rate-follower-v0.5.0-alpha.zip
+            dist/xiaomi-usb-dac-rate-follower-v0.5.0-alpha.zip.sha256
           if-no-files-found: error
           retention-days: 90
 
@@ -41,7 +46,7 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/xiaomi17-bitperfect-v0.3.1-alpha.zip#Magisk and KernelSU module" \
-            "dist/xiaomi17-bitperfect-v0.3.1-alpha.zip.sha256#SHA-256 checksum" \
-            --title "Xiaomi 17 USB Whitelist Rate Follower v0.3.1 Alpha" \
-            --notes "Research archive: enables Xiaomi/AOSP Feature 8, adds a 44.1/48 kHz deep-buffer mixer profile, and gates source-rate following to Apple Music and NetEase Cloud Music while a USB DAC is active. This release proves sample-rate following, not bit-perfect output."
+            "dist/xiaomi-usb-dac-rate-follower-v0.5.0-alpha.zip#Magisk and KernelSU module" \
+            "dist/xiaomi-usb-dac-rate-follower-v0.5.0-alpha.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi USB DAC Rate Follower v0.5.0 Alpha" \
+            --notes "Experimental per-track architecture for Xiaomi 17 Ultra / Android 17. It keeps the firmware-locked Qualcomm USB 44.1 kHz capability patch, marks the existing dynamic hifi_playback path BIT_PERFECT, and hooks AudioTrack creation only inside Apple Music and NetEase Cloud Music. It contains no polling daemon or system AudioPolicyManager binary patch. Hardware transition testing is still required."

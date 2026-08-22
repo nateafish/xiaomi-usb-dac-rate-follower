@@ -1,6 +1,6 @@
-id=xiaomi17-bitperfect
-name=Xiaomi 17 USB Whitelist Rate Follower
-version=0.3.1-alpha
-versionCode=8
+id=xiaomi-usb-dac-rate-follower
+name=Xiaomi USB DAC Rate Follower
+version=0.5.0-alpha
+versionCode=10
 author=nateafish
-description=Enables the built-in 44.1/48 kHz deep-buffer rate manager for selected USB audio apps. Experimental; not yet verified bit-perfect.
+description=Per-track USB sample-rate requests for Apple Music and NetEase via Android 17 BitPerfectThread. No daemon or system audio-policy binary patch. Experimental.

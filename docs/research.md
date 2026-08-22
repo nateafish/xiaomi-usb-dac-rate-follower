@@ -1,198 +1,220 @@
-# Xiaomi 17 Android 17 USB 44.1 kHz / Bit Perfect 研究结果
+# Xiaomi 17 Android 17 USB 采样率跟随研究
 
-## 结论
+## 当前结论
 
-这台 Xiaomi 17（Android 17 / SDK 37 / Qualcomm canoe）已经实机跑通 USB 44.1 kHz Bit Perfect。问题不是 USB DAC 或 ALSA 不支持 44.1，也不是 XML 没声明 44.1，而是 Qualcomm PAL 的动态能力结构最多只返回 7 个采样率；Topping G5 支持的 44.1 kHz 在厂商优先级表中排第 8，因此被截掉。
-
-最终方法由三部分组成：
-
-1. 在本机 `libdev_usb.so` 的采样率优先级表中交换 44.1 kHz 与 352.8 kHz 的位置，让 44.1 进入前 7 项。
-2. 给 AIDL HAL 的动态 `hifi_playback` mixPort 增加 `flags="BIT_PERFECT"`。
-3. 在 Apple Music 或网易云音乐创建 AudioTrack 之前，为当前前台播放器调用 Android preferred mixer API，预设 44.1 kHz、PCM32、`MIXER_BEHAVIOR_BIT_PERFECT`。
-
-补丁后暴露的 USB 采样率为：
+这台设备的 44.1 kHz 限制横跨三层，单改 XML 或单改普通 Mixer 都不够：
 
 ```text
-44100, 48000, 88200, 96000, 176400, 192000, 384000
+应用 AudioTrack（包名、真实源采样率）
+        ↓
+AOSP Audio Policy / preferred mixer（选择输出并决定是否重开）
+        ↓
+QTI AIDL Audio HAL（读取动态 USB profile）
+        ↓
+Qualcomm PAL / libdev_usb.so（USB 能力数组只有 7 个有效速率）
+        ↓
+USB DAC
 ```
 
-代价是 352.8 kHz 不再暴露。没有加入重采样器，也没有把 44.1 升频到 88.2；44.1 内容可以直接进入 44.1 BitPerfectThread。
+`0.5.0-alpha` 的设计是：修正 HAL 暴露的 44.1 kHz 能力，启用系统已有的
+动态 `hifi_playback` BitPerfectThread，然后仅在目标应用创建 PCM 媒体
+`AudioTrack` 之前，按该音轨的真实格式设置 preferred mixer。它不再尝试
+在普通 deep-buffer 流已经运行后改变 PAL 采样率。
 
-## AIDL HAL 与配置承载位置
+## 本机 HAL 与配置承载位置
 
-这台设备同时存在“XML 配置”和“HAL/PAL 二进制逻辑”，两者都影响最终能力：
+本机是 Qualcomm AIDL Audio HAL，关键服务和文件如下：
 
-```text
-/odm/etc/audio/audio_module_config_primary.xml
-        ↓ 端口、路由、flags
-vendor.audio-hal-aidl / audiohalservice.qti
-        ↓ getUsbProfiles()
-PAL_PARAM_ID_DEVICE_CAPABILITY
-        ↓
-/vendor/lib64/libdev_usb.so
-        ↓ 解析 USB 描述符、生成动态采样率数组
-Audio Policy / preferred mixer attributes
-        ↓
-AudioFlinger BitPerfectThread
-```
+- `/vendor/bin/hw/audiohalservice.qti`
+- `/vendor/lib64/hw/libaudiocorehal.qti.so`
+- `/vendor/lib64/hw/libaudiocorehal.default.so`
+- `/vendor/lib64/libaudioaidlcommon.so`
+- `/vendor/lib64/libaudioplatformconverter.qti.so`
+- `/vendor/lib64/libdev_usb.so`
+- `/vendor/etc/init/audiohalservice_qti.rc`
+- `/vendor/etc/vintf/manifest/manifest_audiocorehal_default.xml`
+- `/odm/etc/audio/audio_module_config_primary.xml`
+- `/vendor/etc/audio/audio_module_config_primary.xml`
+- `/odm/etc/audio/resourcemanager_canoe_mtp.xml`
+- `/system_ext/lib64/libaudiohalvendorextn.so`
 
-本机关键路径：
+因此“配置是否写在 HAL 里”的答案是：两边都有。
 
-- 服务：`/vendor/bin/hw/audiohalservice.qti`
-- AIDL：`android.hardware.audio.core.IConfig/default`、`IModule/default`、`IModule/usb`
-- 主配置：`/odm/etc/audio/audio_module_config_primary.xml`
-- vendor fallback：`/vendor/etc/audio/audio_module_config_primary.xml`
-- PAL ResourceManager：`/odm/etc/audio/resourcemanager_canoe_mtp.xml`
-- USB 能力实现：`/vendor/lib64/libdev_usb.so`
-- AIDL core HAL：`/vendor/lib64/hw/libaudiocorehal.qti.so`
-- PAL client：`/vendor/lib64/libar-pal.so`、`/vendor/lib64/libpalclient.so`
+- XML 承载 mix port、profile、route 和 `BIT_PERFECT` flag。
+- AIDL HAL 把 PAL 的 USB 动态能力转换为 framework audio profile。
+- PAL 与 `libdev_usb.so` 解析 USB 描述符、选择设备配置，并决定实际返回
+  哪些采样率。
+- AOSP Audio Policy 负责 preferred mixer 的所有权、profile 匹配、输出
+  reopen 和 AudioFlinger 线程类型。
 
-ResourceManager 配置中 USB 设备已经设置 `<fractional_sr>1</fractional_sr>`，说明 44.1/88.2 系列并未被全局禁用；`hifi_filter=false` 也不是这次 USB 44.1 缺失的原因。
+## 44.1 kHz 为什么消失
 
-## 44.1 kHz 被截掉的准确原因
-
-公开 AudioReach PAL 源码和本机二进制完全吻合。结构定义为 7 个有效采样率加 1 个零终止项：
+PAL 的动态能力 ABI 定义了 7 个有效采样率和 1 个零终止项：
 
 ```cpp
 #define MAX_SUPPORTED_SAMPLE_RATES 7
 uint32_t sample_rate[MAX_SUPPORTED_SAMPLE_RATES + 1];
 ```
 
-USB 能力生成逻辑只循环 `min(7, popcount(mask))` 次，每次取最低置位 bit。厂商表的原始顺序为：
+测试 DAC 支持的速率多于 7 个。厂商优先级表使 44.1 kHz 排在第 8 个可用
+值，所以 USB 描述符匹配日志能看到 44.1，AIDL 动态 profile 最终却没有它。
+不能把第 8 个终止槽直接填满，否则上层按零扫描会越界读取后续字段。
+
+模块保持 ABI 不变，只交换本机 `libdev_usb.so` 中 44.1 和 352.8 kHz 的
+优先级常量：
 
 ```text
-384000, 352800, 192000, 176400, 96000, 88200, 64000,
-48000, 44100, 32000, 24000, 22050, 16000, 11025, 8000
-```
-
-Topping G5 的 PAL 原始 mask 为 `0x1bf`，包含：
-
-```text
-384000, 352800, 192000, 176400, 96000, 88200, 48000, 44100
-```
-
-实机 PAL 日志先明确记录 `sr 44100 ... matches!!`，随后动态返回值却只有前 7 项：
-
-```text
-P 384000
-P 352800
-P 192000
-P 176400
-P 96000
-P 88200
-P 48000
-```
-
-因此 44.1 并非“不支持”，而是第 8 项被固定上限截断。QTI AIDL HAL 的 `getSampleRatesFromProfile()` 只是把这个零终止数组复制到 AIDL profile，并没有再次过滤 44.1。
-
-不能简单把上限从 7 改成 8：数组第 8 个槽位承担零终止作用，而 AIDL HAL 会一直扫描到零；填满 8 个值会越过数组读到紧随其后的 `format[0]`。安全做法是保持 ABI 不变，只调整 44.1 的优先级。
-
-## 二进制补丁
-
-模块只修改本机固件的 `/vendor/lib64/libdev_usb.so` 两个 32 位常量位置：
-
-```text
-原始 SHA-256:
+stock SHA-256:
 d36085dbf0e4f7979ee6b94540b216d949d0f74ab0cda385fdfd5cfc8cd0c296
 
-补丁 SHA-256:
+patched SHA-256:
 04cb4f2a7f4f4247995eb098b7d9a6ba8aeb6ff131144e87a6730d8a9ee4dad6
 
-0x7160: 352800 → 44100
-0x717c: 44100  → 352800
+0x7160: 352800 -> 44100
+0x717c: 44100  -> 352800
 ```
 
-实机临时 bind mount 后，音频 HAL 和 audioserver 均正常重启，动态 USB profile 立即变为：
+补丁后的 7 个动态速率为：
 
 ```text
-44100, 48000, 88200, 96000, 176400, 192000, 384000
+44100 48000 88200 96000 176400 192000 384000
 ```
 
-## Bit Perfect 实机验证
+## 系统已有的 Bit Perfect 路径
 
-`hifi_playback` 使用 Qualcomm XML 解析器接受的短 flag：
+设备 XML 已经有一个无静态 profile 的动态端口：
+
+```xml
+<mixPort name="hifi_playback" role="source">
+</mixPort>
+```
+
+它只路由到 `usb_device_out` 和 `usb_headset`，但 stock XML 没有 flag。
+模块把两份有效配置改为：
 
 ```xml
 <mixPort name="hifi_playback" role="source" flags="BIT_PERFECT">
 </mixPort>
 ```
 
-加载配置后，Audio Policy 显示 `hifi_playback` 带 `0x100000 (BIT_PERFECT)`，动态 USB preferred mixer 同时提供 default 和 bit-perfect 两类属性。
+Android 17 的 `AudioPolicyManager` 会为 USB 设备寻找带动态 profile 且匹配
+采样率、格式、声道和 `BIT_PERFECT` flag 的输出。preferred mixer 改变时，
+framework 可以关闭并按目标格式重开该输出；AudioFlinger 随后建立
+`BitPerfectThread`。本机已验证预先设置 44.1 kHz / PCM32 后能进入 44.1
+kHz BitPerfectThread。
 
-在 USB 端口 38 上，为网易云 UID 10347 设置：
+## 为什么普通 Mixer 方案失败
+
+反编译 `/system/lib64/libaudiopolicymanagerdefault.so` 后确认，小米
+`HifiSampleRateManager` 的调用时序是：
+
+- `AudioPolicyManager::startOutput()` 末尾调用 `onPlaybackStarted()`；
+- `stopOutput()` 调用 `onPlaybackStopped()`；
+- `triggerHardwareSampleRateUpdate()` 最终只回调
+  `AudioPolicyManager::sendkeySamplingRateToAHal()`；
+- 该函数向当前 output 发送 `sampling_rate=...` 参数。
+
+也就是说，它在 output/track 已经选好之后才决策。第一次 44.1 kHz 能成功，
+是因为参数赶在 PAL 第一次启动前到达；后续 48 kHz 只改变 framework 的名义
+状态，已打开的 PAL 流仍保持 44.1 kHz。这不是 `FIRST_LOCK` 单一策略问题，
+所以把策略改为 `LATEST_MAX` 也不能解决硬件流 reopen。
+
+小米扩展库 `/system_ext/lib64/libaudiopolicymanagerimpl.so` 也已检查：
+
+- `AudioPolicyManagerImpl::selectOutput()` 处理的是 CE bypass 和 duplicate
+  output，不是 HiFi 包名路由；
+- `setOutputClientInfo()` 根据 AttributionSource UID 解析包名并设置小米 app
+  mask，但不把目标包迁移到 `hifi_playback`。
+
+因此没有一个现成“小米白名单 XML”可直接开启逐曲 USB 原采样率输出。
+
+## 0.5 的应用侧切入点
+
+设备 `framework.jar` 中的 Android 17 注册签名已经逐项核对：
 
 ```text
-sample rate: 44100
-format: PCM32
-mixer behavior: BIT_PERFECT
-setPreferredMixerAttributes status: 0
+android.media.AudioTrack.native_setup
+(Object weakThis,
+ Object audioAttributes,
+ int[] sampleRate,
+ Object channelMasks,
+ int audioFormat,
+ int bufferSize,
+ int mode,
+ int[] sessionId,
+ Parcel attribution,
+ long nativeTrack,
+ boolean offloaded,
+ int encapsulationMode,
+ Object tunerConfiguration,
+ String opPackageName,
+ String codecProvenance) -> int
 ```
 
-关闭并重新打开网易云，使 AudioTrack 在 preferred mixer 已经设置后创建，AudioFlinger 实际进入：
+这是比 audioserver 后处理更合适的点，因为同一调用里同时存在：
+
+- 当前应用进程/包名；
+- `AudioAttributes` usage；
+- 实际 `sampleRate[0]`；
+- PCM encoding 和 channel mask；
+- 原生 AudioTrack 尚未创建这一时序保证。
+
+Zygisk API 的 `hookJniNativeMethods` 直接替换已注册 JNI 项，不需要修改
+Apple Music APK，也不需要对启用 PAC/BTI 的系统库做 inline hook。模块仅匹配：
 
 ```text
-Thread type: BIT_PERFECT
-Sample rate: 44100 Hz
-HAL format: PCM32
-Processing format: PCM32
-Output device: USB_HEADSET
-Output flags: 0x100000 BIT_PERFECT
+com.apple.android.music[:process]
+com.netease.cloudmusic[:process]
 ```
 
-这证明 44.1 kHz 已经进入 Android 原生 BitPerfectThread，而不是普通 48 kHz Mixer，也不是 44.1 → 88.2 升频路径。本机 `/proc/asound/card0/stream0` 的运行状态一直显示 Stop，不能作为可靠判断；AudioFlinger、Audio Policy 和 HAL 活动流三者一致才是本次验证依据。
+hook 只处理 `USAGE_MEDIA`、非 offload、PCM、USB 已连接的音轨。它构建与
+源采样率/编码/声道一致的 `AudioMixerAttributes`，设置
+`MIXER_BEHAVIOR_BIT_PERFECT`，随后无条件调用原始 `native_setup`。任何 Java
+API 查找、权限或 profile 匹配异常都会被清除并回退到原始建轨，避免把异常
+带回应用。
 
-## Magisk 模块设计
+## KernelSU 注入条件
 
-0.2.0 POC 包含：
+KernelSU 自身不提供 Zygisk。测试机已安装 Zygisk Next 1.4.5，目标应用均为
+`arm64-v8a`，对应模块文件为 `zygisk/arm64-v8a.so`。XML/so overlay 与应用
+进程注入是两件事：
 
-1. ODM 和 vendor 两份 `audio_module_config_primary.xml` 覆盖，给动态 `hifi_playback` 增加 `BIT_PERFECT`。
-2. 本机固件专用的 `system/vendor/lib64/libdev_usb.so` 定点补丁。
-3. root-side DEX 守护进程和 `service.sh`。
+- 有 metamodule 时，由 KernelSU/metamodule 处理 systemless 文件 overlay；
+- 无 metamodule 时，模块在 post-fs-data 阶段只 bind mount
+  `libdev_usb.so` 和两份 XML；
+- Zygisk Next 负责将 arm64 模块载入目标应用。
 
-守护进程动态解析以下包名的 UID，不再硬编码安装编号：
+## 安全边界与待验证项
 
-- `com.netease.cloudmusic`
-- `com.apple.android.music`
+- 不在活动播放期间调用 root-side preferred mixer 写入。
+- 不重启 audioserver，不热替换 AudioPolicyManager，不修改普通 48 kHz mixer。
+- 旧 `0.4` system policy 补丁不得进入新 ZIP。
+- 应用内 EQ、音量归一化、空间音频或软件音量仍可能在 AudioTrack 之前改变
+  样本；Android 的 BitPerfectThread 不能还原已经被应用处理的数据。
+- 逐曲 gapless 切换可能让旧、新 AudioTrack 短暂重叠，必须按测试文档观察
+  preferred mixer 更新、output reopen 和 PAL 配置顺序后才能宣称完成。
 
-当 USB DAC 存在且目标应用进入前台时，它会在 AudioTrack 创建前预设 44.1/PCM32 Bit Perfect；播放建立后，再根据 AudioFlinger 暴露的受支持源采样率更新下一次请求。Android 对同一 USB 媒体策略只保存一个 preferred owner，因此守护进程只把所有权给当前前台或活动的目标播放器。
+## 对应 AOSP / HAL 路径
 
-如果安装模块、插入 DAC 时应用已经在播放，需要彻底关闭并重新打开播放器一次。Android 不会把已经存在的 mixed AudioTrack 自动迁移到 BitPerfectThread。
+Framework 重点检查：
 
-## 限制与安全边界
+- `frameworks/av/services/audiopolicy/managerdefault/AudioPolicyManager.cpp`
+  - `setPreferredMixerAttributes()`
+  - `getOutputForAttrInt()`
+  - `reopenOutput()`
+- `frameworks/av/services/audioflinger/Threads.cpp`
+  - `BitPerfectThread`
+- `frameworks/base/media/java/android/media/AudioManager.java`
+  - `setPreferredMixerAttributes()`
+- `frameworks/base/media/java/android/media/AudioMixerAttributes.java`
+- `frameworks/base/core/jni/android_media_AudioTrack.cpp`
+- `frameworks/av/media/libaudioclient/AudioTrack.cpp`
+- `system/media/audio/include/system/audio.h`
 
-- 模块只适用于这台设备当前固件；原始 `libdev_usb.so` SHA-256 不一致时不得安装。
-- 352.8 kHz 被牺牲，原因是 vendor ABI 只有 7 个有效采样率槽。
-- 初始预设按 44.1 kHz 处理，适合 Apple Music/网易云的常见内容；若应用内部已经输出 48 kHz，模块不能从 48 kHz 还原原始 44.1 数据。
-- 严格 bit-perfect 仍要求关闭播放器 EQ、音量归一化、空间音频等应用内处理，并避免数字音量改变。
-- 模块未自动安装；研究期间的所有 HAL/XML 测试都采用可撤销临时挂载。
+公开实现参考：
 
-## 44.1 → 88.2 备用路线
-
-独立的 88.2 kHz Mixer POC 也已实机验证：网易云保持 PCM16/44100 AudioTrack，AudioFlinger 普通 Mixer 以 PCM32/88200 向 USB 输出。它能避开 48 kHz 锁定，但属于重采样，不是 Bit Perfect。既然严格 44.1 路径现已打通，优先使用 0.2.0 Bit Perfect 模块，只有兼容性需要时再使用 88.2 Mixer 测试包。
-
-## 对应公开源码
-
-- [AudioReach PAL：动态能力结构定义](https://github.com/AudioReach/audioreach-pal/blob/88ad5461a87735124c2daa321a114c5806445e4b/inc/PalDefs.h#L620-L623)
-- [AudioReach PAL：USB 采样率 mask 截取与优先级表](https://github.com/AudioReach/audioreach-pal/blob/88ad5461a87735124c2daa321a114c5806445e4b/device/USBAudio/src/USBAudio.cpp#L815-L840)
-- [QTI AIDL HAL：从 PAL 获取 USB 动态能力](https://github.com/sonyxperiadev/vendor-qcom-opensource-audio-hal-primary-hal-ar/blob/b071e74ead44a7aecee69969003b902632cd4ab3/hal/core/platform/Platform.cpp#L417-L480)
-- [QTI AIDL HAL：复制零终止采样率数组](https://github.com/sonyxperiadev/vendor-qcom-opensource-audio-hal-primary-hal-ar/blob/b071e74ead44a7aecee69969003b902632cd4ab3/hal/core/platform/PlatformUtils.cpp#L117-L123)
-- [Android：Preferred mixer attributes on USB devices](https://source.android.com/docs/core/audio/preferred-mixer-attr)
-# v0.3.0-alpha: built-in deep-buffer rate manager
-
-Reverse engineering found `FeatureManager::isFeatureEnable(8)` in
-`/system/lib64/libmediautils.so`. Feature 8 is controlled by bit `0x2` of
-`ro.vendor.audio.hifi.config`. Xiaomi ships the property as `13`; changing it
-to `15` before audioserver starts makes `AudioPolicyManager::initialize()`
-create the missing `deep_buffer_out` `HifiSampleRateManager` profile.
-
-The manager already receives the active package name and source sample rate.
-It uses a FIRST_LOCK strategy with 48 kHz as the default and can request a
-48-to-44.1 kHz hardware update. The update is skipped unless its internal
-`activeEffect` state is `none`. The alpha module therefore changes this state
-only while a whitelisted app has an active USB AudioFlinger track, then returns
-the manager to its default-48-kHz state when the app stops.
-
-Observed after setting `activeEffect=none`: AudioFlinger reopened the
-`deep_buffer_out` MIXER thread at 44100 Hz and Qualcomm PAL selected 44100 Hz.
-This does not prove that effect chains are detached or that samples are
-bit-identical, so the build is deliberately labeled a rate-follower alpha.
+- [Android preferred mixer attributes](https://source.android.com/docs/core/audio/preferred-mixer-attr)
+- [AOSP AudioPolicyManager preferred mixer / reopen](https://android.googlesource.com/platform/frameworks/av/+/8f4ff60a672a5609d63cf3c6ec668da842c7900c/services/audiopolicy/managerdefault/AudioPolicyManager.cpp)
+- [AudioReach PAL dynamic capability ABI](https://github.com/AudioReach/audioreach-pal/blob/88ad5461a87735124c2daa321a114c5806445e4b/inc/PalDefs.h#L620-L623)
+- [AudioReach PAL USB sample-rate selection](https://github.com/AudioReach/audioreach-pal/blob/88ad5461a87735124c2daa321a114c5806445e4b/device/USBAudio/src/USBAudio.cpp#L815-L840)
+- [QTI AIDL HAL USB capability conversion](https://github.com/sonyxperiadev/vendor-qcom-opensource-audio-hal-primary-hal-ar/blob/b071e74ead44a7aecee69969003b902632cd4ab3/hal/core/platform/Platform.cpp#L417-L480)

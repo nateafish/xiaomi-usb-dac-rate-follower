@@ -1,49 +1,75 @@
 # Xiaomi USB DAC Rate Follower
 
 Device-specific Magisk/KernelSU research module for the Xiaomi 17 Ultra
-Android 17 Qualcomm AIDL audio stack.
+(`nezha`), Android 17 / API 37, and its Qualcomm AIDL audio stack.
 
-Version `0.3.1-alpha` enables Xiaomi/AOSP's built-in deep-buffer sample-rate
-manager, adds 44.1 kHz to the ordinary `deep_buffer_out` mixer, and activates
-source-rate following only while a whitelisted app is playing through a USB
-DAC. The default whitelist contains Apple Music and NetEase Cloud Music:
+Version `0.5.0-alpha` moves sample-rate selection to the only point that has
+both the target package identity and the real source format: immediately before
+the app creates an `AudioTrack`. A Zygisk hook is loaded only into Apple Music
+and NetEase Cloud Music. For PCM media tracks with a connected USB DAC, it asks
+Android 17 for a bit-perfect preferred mixer matching the track's sample rate,
+encoding, and channel layout; the original `AudioTrack.native_setup` then runs
+unchanged.
 
-```text
-com.apple.android.music
-com.netease.cloudmusic
-```
+## Why the architecture changed
 
-Edit `config/packages.list` before installation to add more packages.
+The failed `0.4.0-alpha` experiment changed Xiaomi's ordinary
+`deep_buffer_out` mixer and patched the system AudioPolicyManager. Reverse
+engineering and live traces showed that Xiaomi's rate manager runs after the
+output is selected and only sends `sampling_rate=...` to the HAL. It can set
+44.1 kHz before the first PAL stream opens, but it cannot safely reconfigure an
+already running 44.1 kHz PAL stream to 48 kHz. The policy descriptor changed to
+48 kHz while the USB backend stayed at 44.1 kHz, causing audible speed errors.
+A live preferred-mixer write during active playback was also associated with a
+device freeze. That design is removed from this version.
+
+`0.5.0-alpha` contains no system AudioPolicyManager binary patch, polling
+daemon, audio-parameter helper, audioserver restart, or ordinary-mixer rate
+modification.
+
+## Components
+
+- A firmware-locked `libdev_usb.so` patch puts 44.1 kHz inside Qualcomm PAL's
+  seven-entry dynamic USB rate list. It displaces 352.8 kHz.
+- The stock dynamic `hifi_playback` mix port is marked `BIT_PERFECT` in both
+  ODM and vendor audio module configurations.
+- An arm64 Zygisk module hooks the exact Android 17
+  `AudioTrack.native_setup` registration only in:
+  - `com.apple.android.music`
+  - `com.netease.cloudmusic`
+- Non-media, compressed/offload, non-USB, and non-target application tracks
+  fall through to stock behavior.
 
 ## What is verified
 
-- The USB DAC advertises 44.1 kHz and Qualcomm PAL accepts it.
-- `ro.vendor.audio.hifi.config=15` enables Feature 8 and creates the missing
-  `deep_buffer_out` HifiSampleRateManager profile.
-- The manager receives the active package and source sample rate.
-- With its effect gate set to `none`, AudioFlinger reopens a normal MIXER
-  thread at 44.1 kHz and PAL selects 44.1 kHz.
-- The manager's default rate is 48 kHz and it resets when the whitelist is idle.
+- The DAC and ALSA layer support native 44.1 kHz.
+- Qualcomm PAL accepts 44.1 kHz after the seven-rate capability patch.
+- With a preferred mixer configured before track creation, Android 17 can open
+  a 44.1 kHz `BIT_PERFECT` thread on this HAL.
+- Both target applications are arm64, and the device has Zygisk Next 1.4.5 on
+  KernelSU 4.1.3.
+- The Zygisk source compiles cleanly against NDK 29 and the module ZIP passes
+  structural and negative-content checks.
 
-## Important limitation
+## Not yet verified
 
-This build is not yet proven bit-perfect. It proves system-side sample-rate
-following, but it does not yet prove that Dolby/MiSound/session effect chains,
-software volume, and all processing are detached. The module name is retained
-for upgrade compatibility; the release title deliberately says Rate Follower.
+- The new Zygisk hook has not yet been enabled on the phone.
+- End-to-end per-track transitions such as 44.1 -> 48 -> 96 kHz remain to be
+  tested in phases.
+- Bit identity still depends on the player not changing samples before
+  `AudioTrack` (EQ, normalization, spatial processing, or software volume).
+- Apple Music can only be followed at the rate it actually submits to Android,
+  which may differ from catalog metadata.
 
-## Device lock
+Do not describe this alpha as a completed universal bit-perfect solution.
 
-The bundled `libdev_usb.so` patch is firmware-specific. Installation aborts
-unless `/vendor/lib64/libdev_usb.so` matches the known stock or patched SHA-256.
-The vendor ABI exposes seven usable USB rate slots, so 44.1 kHz replaces
-352.8 kHz; exposed rates are 44.1/48/88.2/96/176.4/192/384 kHz.
+## Device and root requirements
 
-## KernelSU
-
-KernelSU without a metamodule uses the included early bind-mount helper. It
-applies the correct SELinux labels before mounting vendor/odm audio XML files.
-No Zygisk or application injection is used.
+Installation aborts unless `/vendor/lib64/libdev_usb.so` matches the known
+stock or patched SHA-256 for the tested firmware. Android 17 / API 37 is also
+required. KernelSU users need Zygisk Next or another compatible Zygisk provider.
+KernelSU without a metamodule uses the included early bind-mount helper for the
+vendor library and the two XML files.
 
 ## Build
 
@@ -51,6 +77,10 @@ No Zygisk or application injection is used.
 bash scripts/build.sh
 ```
 
-Every push to `main` builds and verifies the ZIP. Tags matching `v*` also
-publish a GitHub Release. See [TESTING.md](TESTING.md) for the exact test
-baseline and `docs/research.md` for reverse-engineering notes.
+Set `ANDROID_NDK_HOME` when the NDK is not discoverable from
+`ANDROID_SDK_ROOT`. Every push to `main` builds and verifies the ZIP. Tags
+matching `v*` also publish a GitHub Release.
+
+See [TESTING.md](TESTING.md) for the phased test and recovery procedure, and
+[`docs/research.md`](docs/research.md) for HAL/AOSP paths and reverse-engineering
+evidence.

@@ -6,6 +6,9 @@ TARGET_LIB=/vendor/lib64/libdev_usb.so
 
 ui_print "- Checking Xiaomi 17 Qualcomm USB audio library"
 
+if [ "$(getprop ro.build.version.sdk)" != "37" ]; then
+    abort "! Android 17 / SDK 37 is required"
+fi
 if [ ! -r "$TARGET_LIB" ]; then
     abort "! $TARGET_LIB is missing; this firmware is unsupported"
 fi
@@ -16,19 +19,20 @@ case "$actual_sha256" in
     *)
         ui_print "! Expected stock: $EXPECTED_SHA256"
         ui_print "! Found:          $actual_sha256"
-        abort "! Firmware mismatch; refusing to install the binary patch"
+        abort "! Firmware mismatch; refusing to install the USB capability patch"
         ;;
 esac
 
-set_perm "$MODPATH/service.sh" 0 0 0755
 set_perm "$MODPATH/post-fs-data.sh" 0 0 0755
 set_perm "$MODPATH/mount-audio.sh" 0 0 0755
-set_perm "$MODPATH/bin/set-audio-parameters" 0 0 0755
-set_perm "$MODPATH/config/packages.list" 0 0 0644
 set_perm "$MODPATH/system/vendor/lib64/libdev_usb.so" 0 0 0644
+set_perm "$MODPATH/zygisk/arm64-v8a.so" 0 0 0644
 
-ui_print "- 44.1 kHz replaces 352.8 kHz in the seven-rate USB capability list"
-ui_print "- Includes self-contained KernelSU 4.x mounts when no metamodule exists"
-ui_print "- Enables Xiaomi's built-in deep-buffer rate manager (Feature 8)"
-ui_print "- Default whitelist: Apple Music and NetEase Cloud Music"
-ui_print "- Alpha: sample-rate following is verified; bit-perfect is not"
+ui_print "- Exposes USB rates: 44.1/48/88.2/96/176.4/192/384 kHz"
+ui_print "- Enables Android's dynamic hifi_playback BitPerfectThread"
+ui_print "- Hooks AudioTrack creation only in Apple Music and NetEase Cloud Music"
+ui_print "- No audio-policy binary patch, polling daemon, or live audioserver restart"
+if [ "${KSU:-}" = "true" ] || [ -x /data/adb/ksud ]; then
+    ui_print "! KernelSU requires Zygisk Next (or another compatible Zygisk provider)"
+fi
+ui_print "! Experimental: review the documented recovery steps before enabling"
