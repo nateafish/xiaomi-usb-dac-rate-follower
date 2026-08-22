@@ -3,13 +3,16 @@
 Device-specific Magisk/KernelSU research module for the Xiaomi 17 Ultra
 (`nezha`), Android 17 / API 37, and its Qualcomm AIDL audio stack.
 
-Version `0.5.0-alpha` moves sample-rate selection to the only point that has
+Version `0.5.1-alpha` moves sample-rate selection to the only point that has
 both the target package identity and the real source format: immediately before
 the app creates an `AudioTrack`. A Zygisk hook is loaded only into Apple Music
 and NetEase Cloud Music. For PCM media tracks with a connected USB DAC, it asks
-Android 17 for a bit-perfect preferred mixer matching the track's sample rate,
-encoding, and channel layout; the original `AudioTrack.native_setup` then runs
-unchanged.
+Android 17 for a PCM32 preferred mixer matching the track's sample rate and
+channel layout. Preference-only attributes omit the players' `DEEP_BUFFER`
+flag, which otherwise makes AOSP search for a nonexistent
+`DEEP_BUFFER | BIT_PERFECT` USB profile. The original `AudioTrack.native_setup`
+then runs unchanged, and AudioFlinger performs its normal source-to-PCM32
+conversion when the app submits Float, PCM16, or PCM24.
 
 ## Why the architecture changed
 
@@ -23,7 +26,7 @@ already running 44.1 kHz PAL stream to 48 kHz. The policy descriptor changed to
 A live preferred-mixer write during active playback was also associated with a
 device freeze. That design is removed from this version.
 
-`0.5.0-alpha` contains no system AudioPolicyManager binary patch, polling
+`0.5.1-alpha` contains no system AudioPolicyManager binary patch, polling
 daemon, audio-parameter helper, audioserver restart, or ordinary-mixer rate
 modification.
 
@@ -46,6 +49,8 @@ modification.
 - Qualcomm PAL accepts 44.1 kHz after the seven-rate capability patch.
 - With a preferred mixer configured before track creation, Android 17 can open
   a 44.1 kHz `BIT_PERFECT` thread on this HAL.
+- Live traces confirmed that `DEEP_BUFFER` in the target apps' media attributes
+  prevented later preferred-mixer requests from matching the hifi profile.
 - Both target applications are arm64, and the device has Zygisk Next 1.4.5 on
   KernelSU 4.1.3.
 - The Zygisk source compiles cleanly against NDK 29 and the module ZIP passes
@@ -53,13 +58,14 @@ modification.
 
 ## Not yet verified
 
-- The new Zygisk hook has not yet been enabled on the phone.
-- End-to-end per-track transitions such as 44.1 -> 48 -> 96 kHz remain to be
-  tested in phases.
+- PCM32 rate-following transitions such as 44.1 -> 48 -> 96 kHz remain to be
+  tested in phases on the hardware display.
 - Bit identity still depends on the player not changing samples before
   `AudioTrack` (EQ, normalization, spatial processing, or software volume).
 - Apple Music can only be followed at the rate it actually submits to Android,
   which may differ from catalog metadata.
+- A Float or PCM16 source converted by AudioFlinger into PCM32 is not strict
+  bit identity, even when sample rate follows correctly.
 
 Do not describe this alpha as a completed universal bit-perfect solution.
 

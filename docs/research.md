@@ -16,7 +16,7 @@ Qualcomm PAL / libdev_usb.so（USB 能力数组只有 7 个有效速率）
 USB DAC
 ```
 
-`0.5.0-alpha` 的设计是：修正 HAL 暴露的 44.1 kHz 能力，启用系统已有的
+`0.5.1-alpha` 的设计是：修正 HAL 暴露的 44.1 kHz 能力，启用系统已有的
 动态 `hifi_playback` BitPerfectThread，然后仅在目标应用创建 PCM 媒体
 `AudioTrack` 之前，按该音轨的真实格式设置 preferred mixer。它不再尝试
 在普通 deep-buffer 流已经运行后改变 PAL 采样率。
@@ -156,7 +156,7 @@ android.media.AudioTrack.native_setup
 - 当前应用进程/包名；
 - `AudioAttributes` usage；
 - 实际 `sampleRate[0]`；
-- PCM encoding 和 channel mask；
+- 源 PCM encoding 和 channel mask（preferred 输出统一选择 PCM32）；
 - 原生 AudioTrack 尚未创建这一时序保证。
 
 Zygisk API 的 `hookJniNativeMethods` 直接替换已注册 JNI 项，不需要修改

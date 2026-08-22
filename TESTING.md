@@ -72,7 +72,7 @@ during active playback.
 ## Current boot warning
 
 The old module has a `disable` marker but its files remain mounted until the
-next reboot. Before any `0.5.0-alpha` test, verify that mountinfo contains no
+next reboot. Before any `0.5.1-alpha` test, verify that mountinfo contains no
 `xiaomi17-bitperfect` paths and that the stock system policy library is active.
 Do not install the new alpha into the current contaminated boot.
 

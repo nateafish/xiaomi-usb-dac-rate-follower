@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.5.0-alpha
+VERSION=0.5.1-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 PATCHED_LIB_SHA256=04cb4f2a7f4f4247995eb098b7d9a6ba8aeb6ff131144e87a6730d8a9ee4dad6
 
@@ -69,7 +69,7 @@ grep -A4 'name="deep_buffer_out"' \
     | grep -q 'samplingRates="48000"'
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.5.0-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.5.1-alpha$' "$MODULE_STAGE/module.prop"
 [[ ! -e "$MODULE_STAGE/service.sh" ]]
 [[ ! -e "$MODULE_STAGE/bin/set-audio-parameters" ]]
 [[ ! -e "$MODULE_STAGE/system/lib64/libaudiopolicymanagerdefault.so" ]]

@@ -211,6 +211,51 @@ jobject buildBitPerfectMixerAttributes(JNIEnv *env, jobject format) {
     return attributes;
 }
 
+jobject buildPreferenceAudioAttributes(JNIEnv *env, jobject sourceAttributes) {
+    jclass attributesClass = env->FindClass("android/media/AudioAttributes");
+    jmethodID getUsage = attributesClass == nullptr ? nullptr :
+            env->GetMethodID(attributesClass, "getUsage", "()I");
+    jmethodID getContentType = attributesClass == nullptr ? nullptr :
+            env->GetMethodID(attributesClass, "getContentType", "()I");
+    if (clearException(env, "AudioAttributes getters") || getUsage == nullptr ||
+        getContentType == nullptr) {
+        if (attributesClass != nullptr) env->DeleteLocalRef(attributesClass);
+        return nullptr;
+    }
+    const jint usage = env->CallIntMethod(sourceAttributes, getUsage);
+    const jint contentType = env->CallIntMethod(sourceAttributes, getContentType);
+    env->DeleteLocalRef(attributesClass);
+    if (clearException(env, "AudioAttributes read")) return nullptr;
+
+    jclass builderClass = env->FindClass("android/media/AudioAttributes$Builder");
+    jmethodID constructor = builderClass == nullptr ? nullptr :
+            env->GetMethodID(builderClass, "<init>", "()V");
+    jmethodID setUsage = builderClass == nullptr ? nullptr : env->GetMethodID(
+            builderClass, "setUsage", "(I)Landroid/media/AudioAttributes$Builder;");
+    jmethodID setContentType = builderClass == nullptr ? nullptr : env->GetMethodID(
+            builderClass, "setContentType", "(I)Landroid/media/AudioAttributes$Builder;");
+    jmethodID build = builderClass == nullptr ? nullptr : env->GetMethodID(
+            builderClass, "build", "()Landroid/media/AudioAttributes;");
+    if (clearException(env, "AudioAttributes.Builder methods") || constructor == nullptr ||
+        setUsage == nullptr || setContentType == nullptr || build == nullptr) {
+        if (builderClass != nullptr) env->DeleteLocalRef(builderClass);
+        return nullptr;
+    }
+
+    jobject builder = env->NewObject(builderClass, constructor);
+    if (clearException(env, "AudioAttributes.Builder constructor") || builder == nullptr) {
+        env->DeleteLocalRef(builderClass);
+        return nullptr;
+    }
+    env->CallObjectMethod(builder, setUsage, usage);
+    env->CallObjectMethod(builder, setContentType, contentType);
+    jobject result = env->CallObjectMethod(builder, build);
+    if (clearException(env, "preference AudioAttributes build")) result = nullptr;
+    env->DeleteLocalRef(builder);
+    env->DeleteLocalRef(builderClass);
+    return result;
+}
+
 bool applyBitPerfectPreference(JNIEnv *env, jobject audioAttributes, jintArray sampleRates,
                                jobject channelMasks, jint encoding, jboolean offloaded) {
     if (audioAttributes == nullptr || sampleRates == nullptr || offloaded || !isPcmEncoding(encoding)) {
@@ -244,11 +289,15 @@ bool applyBitPerfectPreference(JNIEnv *env, jobject audioAttributes, jintArray s
     }
 
     const jint channelMask = getPositionChannelMask(env, channelMasks);
-    jobject format = buildAudioFormat(env, sampleRate, encoding, channelMask);
+    // USB Audio exposes integer PCM. Keep the app's source AudioTrack untouched and
+    // let AudioFlinger perform its existing float/16/24 -> PCM32 conversion.
+    constexpr jint kPcm32Encoding = 22;  // AudioFormat.ENCODING_PCM_32BIT
+    jobject preferenceAttributes = buildPreferenceAudioAttributes(env, audioAttributes);
+    jobject format = buildAudioFormat(env, sampleRate, kPcm32Encoding, channelMask);
     jobject mixerAttributes = format == nullptr ? nullptr :
             buildBitPerfectMixerAttributes(env, format);
     bool success = false;
-    if (mixerAttributes != nullptr) {
+    if (preferenceAttributes != nullptr && mixerAttributes != nullptr) {
         jclass managerClass = env->FindClass("android/media/AudioManager");
         jmethodID setPreferred = managerClass == nullptr ? nullptr : env->GetMethodID(
                 managerClass, "setPreferredMixerAttributes",
@@ -257,17 +306,19 @@ bool applyBitPerfectPreference(JNIEnv *env, jobject audioAttributes, jintArray s
         const bool lookupFailed = clearException(env, "setPreferredMixerAttributes lookup");
         if (setPreferred != nullptr && !lookupFailed) {
             success = env->CallBooleanMethod(
-                    audioManager, setPreferred, audioAttributes, usbDevice, mixerAttributes);
+                    audioManager, setPreferred, preferenceAttributes, usbDevice, mixerAttributes);
             if (clearException(env, "setPreferredMixerAttributes")) success = false;
         }
         if (managerClass != nullptr) env->DeleteLocalRef(managerClass);
     }
 
-    LOGI("process=%s rate=%d encoding=%d channelMask=0x%x preferred=%s",
-         gProcessName, sampleRate, encoding, channelMask, success ? "accepted" : "rejected");
+    LOGI("process=%s rate=%d sourceEncoding=%d outputEncoding=%d channelMask=0x%x preferred=%s",
+         gProcessName, sampleRate, encoding, kPcm32Encoding, channelMask,
+         success ? "accepted" : "rejected");
 
     if (mixerAttributes != nullptr) env->DeleteLocalRef(mixerAttributes);
     if (format != nullptr) env->DeleteLocalRef(format);
+    if (preferenceAttributes != nullptr) env->DeleteLocalRef(preferenceAttributes);
     env->DeleteLocalRef(usbDevice);
     env->DeleteLocalRef(audioManager);
     return success;
