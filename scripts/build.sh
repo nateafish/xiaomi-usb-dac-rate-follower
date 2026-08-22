@@ -2,11 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.6.6-alpha
+VERSION=0.7.2-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
-    local root candidate
+    local root candidate sdk_root
     for root in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}"; do
         candidate="$root/toolchains/llvm/prebuilt"
         if [[ -d "$candidate" ]]; then
@@ -14,7 +14,7 @@ find_clang() {
             return
         fi
     done
-    local sdk_root=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}
+    sdk_root=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}
     if [[ -n "$sdk_root" ]]; then
         find "$sdk_root/ndk" -path '*/toolchains/llvm/prebuilt/*/bin/clang' \
             2>/dev/null | sort -V | tail -n 1
@@ -27,48 +27,49 @@ CLANG=$(find_clang)
     exit 1
 }
 LLVM_BIN=$(dirname "$CLANG")
-
 BUILD_DIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/xiaomi-usb-rate-follower.XXXXXX")
 trap 'rm -rf "$BUILD_DIR"' EXIT
 
-"$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/is_app_allowed_hook.S" -o "$BUILD_DIR/is_app_allowed_hook.o"
-"$LLVM_BIN/ld.lld" --entry=is_app_allowed_hook --section-start=.text=0xd3bcc \
-    "$BUILD_DIR/is_app_allowed_hook.o" -o "$BUILD_DIR/is_app_allowed_hook.elf"
-"$LLVM_BIN/llvm-objcopy" -O binary --only-section=.text \
-    "$BUILD_DIR/is_app_allowed_hook.elf" "$BUILD_DIR/is_app_allowed_hook.bin"
+require_size() {
+    local file=$1 expected=$2 actual
+    actual=$(wc -c < "$file")
+    [[ "$actual" -eq "$expected" ]] || {
+        echo "unexpected size for $file: $actual (expected $expected)" >&2
+        exit 1
+    }
+}
+
+require_hex() {
+    local file=$1 expected=$2 actual
+    actual=$(xxd -p "$file")
+    [[ "$actual" == "$expected" ]] || {
+        echo "unexpected bytes for $file: $actual (expected $expected)" >&2
+        exit 1
+    }
+}
 
 "$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/preferred_hifi_hook.S" -o "$BUILD_DIR/preferred_hifi_hook.o"
-"$LLVM_BIN/ld.lld" --entry=preferred_hifi_hook \
-    --section-start=.hifi_config_branch=0x38800 \
-    --section-start=.preferred_hifi_branch=0x5575c \
-    --section-start=.preferred_hifi_cave=0xc37ac \
-    --defsym=HIFI_INIT_RETURN=0x38804 \
-    --defsym=GET_OUTPUT_HOOK_RETURN=0x55760 \
-    --defsym=GET_PREFERRED_INFO=0x5aae0 \
-    --defsym=SET_PREFERRED_ATTRIBUTES=0xa4ea0 \
-    --defsym=REFBASE_DEC_STRONG_PLT=0xdb4d8 \
-    "$BUILD_DIR/preferred_hifi_hook.o" -o "$BUILD_DIR/preferred_hifi_hook.elf"
+    "$ROOT_DIR/patches/native_hifi_select_hook.S" \
+    -o "$BUILD_DIR/native_hifi_select_hook.o"
+"$LLVM_BIN/ld.lld" --entry=native_hifi_select_hook \
+    --section-start=.select_output_branch=0x57214 \
+    --section-start=.hifi_app_branch=0xd3bcc \
+    --section-start=.latest_max_final_stop_patch=0xd30a0 \
+    --section-start=.latest_max_idle_rate_patch=0xd3630 \
+    --section-start=.native_hifi_cave=0xc37ac \
+    --defsym=VENDOR_SELECT_OUTPUT_STUB=0xda110 \
+    --defsym=SELECT_OUTPUT_RETURN=0x57218 \
+    --defsym=HIFI_APP_STOCK_CONTINUE=0xd3bd0 \
+    --defsym=LATEST_MAX_TRUE_RETURN=0xd2e80 \
+    "$BUILD_DIR/native_hifi_select_hook.o" \
+    -o "$BUILD_DIR/native_hifi_select_hook.elf"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .hifi_config_branch="$BUILD_DIR/hifi_config_branch.bin" \
-    --dump-section .preferred_hifi_branch="$BUILD_DIR/preferred_hifi_branch.bin" \
-    --dump-section .preferred_hifi_cave="$BUILD_DIR/preferred_hifi_cave.bin" \
-    "$BUILD_DIR/preferred_hifi_hook.elf"
-
-"$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/shared_usb_arbiter.S" -o "$BUILD_DIR/shared_usb_arbiter.o"
-"$LLVM_BIN/ld.lld" --entry=shared_usb_arbiter \
-    --section-start=.shared_arbiter_branch=0xd57bc \
-    --section-start=.shared_arbiter_cave=0xc3928 \
-    --defsym=PROFILE_LOOKUP=0xd4710 \
-    --defsym=ARBITER_CALL_PATH=0xd57c0 \
-    --defsym=ARBITER_SKIP_PATH=0xd5814 \
-    "$BUILD_DIR/shared_usb_arbiter.o" -o "$BUILD_DIR/shared_usb_arbiter.elf"
-"$LLVM_BIN/llvm-objcopy" \
-    --dump-section .shared_arbiter_branch="$BUILD_DIR/shared_arbiter_branch.bin" \
-    --dump-section .shared_arbiter_cave="$BUILD_DIR/shared_arbiter_cave.bin" \
-    "$BUILD_DIR/shared_usb_arbiter.elf"
+    --dump-section .select_output_branch="$BUILD_DIR/select_output_branch.bin" \
+    --dump-section .hifi_app_branch="$BUILD_DIR/hifi_app_branch.bin" \
+    --dump-section .latest_max_final_stop_patch="$BUILD_DIR/latest_max_final_stop_patch.bin" \
+    --dump-section .latest_max_idle_rate_patch="$BUILD_DIR/latest_max_idle_rate_patch.bin" \
+    --dump-section .native_hifi_cave="$BUILD_DIR/native_hifi_cave.bin" \
+    "$BUILD_DIR/native_hifi_select_hook.elf"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/usb_output_gate.S" -o "$BUILD_DIR/usb_output_gate.o"
@@ -84,101 +85,80 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
     "$BUILD_DIR/usb_output_gate.elf"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/instruction_patches.S" -o "$BUILD_DIR/instruction_patches.o"
+    "$ROOT_DIR/patches/instruction_patches.S" \
+    -o "$BUILD_DIR/instruction_patches.o"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .strategy_restore_patch="$BUILD_DIR/strategy_restore_patch.bin" \
-    --dump-section .profile_init_patch="$BUILD_DIR/profile_init_patch.bin" \
-    --dump-section .effect_gate_patch="$BUILD_DIR/effect_gate_patch.bin" \
     --dump-section .flinger_sync_patch="$BUILD_DIR/flinger_sync_patch.bin" \
-    --dump-section .hal_deep_buffer_reopen_patch="$BUILD_DIR/hal_deep_buffer_reopen_patch.bin" \
     --dump-section .usb_441_patch="$BUILD_DIR/usb_441_patch.bin" \
     --dump-section .usb_3528_patch="$BUILD_DIR/usb_3528_patch.bin" \
     "$BUILD_DIR/instruction_patches.o"
 
-[[ $(wc -c < "$BUILD_DIR/is_app_allowed_hook.bin") -eq 196 ]]
-[[ $(wc -c < "$BUILD_DIR/hifi_config_branch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/preferred_hifi_branch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/preferred_hifi_cave.bin") -eq 374 ]]
-[[ $(wc -c < "$BUILD_DIR/shared_arbiter_branch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/shared_arbiter_cave.bin") -eq 440 ]]
-[[ $(wc -c < "$BUILD_DIR/usb_output_gate_branch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/usb_output_gate_cave.bin") -eq 140 ]]
-[[ $(wc -c < "$BUILD_DIR/strategy_restore_patch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/profile_init_patch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/effect_gate_patch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/flinger_sync_patch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/hal_deep_buffer_reopen_patch.bin") -eq 16 ]]
-[[ $(wc -c < "$BUILD_DIR/usb_441_patch.bin") -eq 4 ]]
-[[ $(wc -c < "$BUILD_DIR/usb_3528_patch.bin") -eq 4 ]]
-[[ $(xxd -p "$BUILD_DIR/strategy_restore_patch.bin") == 030b40b9 ]]
-[[ $(xxd -p "$BUILD_DIR/hifi_config_branch.bin") == eb2b0214 ]]
-[[ $(xxd -p "$BUILD_DIR/preferred_hifi_branch.bin") == 19b80114 ]]
-[[ $(xxd -p "$BUILD_DIR/shared_arbiter_branch.bin") == 5bb8ff17 ]]
-[[ $(xxd -p "$BUILD_DIR/usb_output_gate_branch.bin") == d3160114 ]]
-[[ $(xxd -p "$BUILD_DIR/profile_init_patch.bin") == 1f2003d5 ]]
-[[ $(xxd -p "$BUILD_DIR/effect_gate_patch.bin") == 62010054 ]]
-[[ $(xxd -p "$BUILD_DIR/flinger_sync_patch.bin") == 6a000014 ]]
-[[ $(xxd -p "$BUILD_DIR/hal_deep_buffer_reopen_patch.bin") == 092184522925c81a090200361f2003d5 ]]
-[[ $(xxd -p "$BUILD_DIR/usb_441_patch.bin") == 44ac0000 ]]
-[[ $(xxd -p "$BUILD_DIR/usb_3528_patch.bin") == 20620500 ]]
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/is_app_allowed_hook.elf" \
-    | grep -q 'There are no relocations'
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/preferred_hifi_hook.elf" \
-    | grep -q 'There are no relocations'
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/shared_usb_arbiter.elf" \
+"$CLANG" --target=aarch64-linux-android35 -c \
+    "$ROOT_DIR/patches/qti_hifi_hal_patches.S" \
+    -o "$BUILD_DIR/qti_hifi_hal_patches.o"
+"$LLVM_BIN/ld.lld" --entry=hifi_frame_count_cap_patch \
+    --section-start=.hifi_frame_count_cap_patch=0x279bd8 \
+    --section-start=.hifi_usecase_reconfigure_patch=0x230894 \
+    --defsym=HIFI_FRAME_COUNT_EPILOGUE=0x279c10 \
+    --defsym=HIFI_USECASE_SKIP_RECONFIGURE=0x2308dc \
+    "$BUILD_DIR/qti_hifi_hal_patches.o" \
+    -o "$BUILD_DIR/qti_hifi_hal_patches.elf"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .hifi_frame_count_cap_patch="$BUILD_DIR/hifi_frame_count_cap_patch.bin" \
+    --dump-section .hifi_usecase_reconfigure_patch="$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" \
+    "$BUILD_DIR/qti_hifi_hal_patches.elf"
+
+require_size "$BUILD_DIR/select_output_branch.bin" 4
+require_size "$BUILD_DIR/hifi_app_branch.bin" 4
+require_size "$BUILD_DIR/native_hifi_cave.bin" 744
+require_size "$BUILD_DIR/latest_max_final_stop_patch.bin" 4
+require_size "$BUILD_DIR/latest_max_idle_rate_patch.bin" 4
+require_size "$BUILD_DIR/usb_output_gate_branch.bin" 4
+require_size "$BUILD_DIR/usb_output_gate_cave.bin" 140
+require_size "$BUILD_DIR/flinger_sync_patch.bin" 4
+require_size "$BUILD_DIR/usb_441_patch.bin" 4
+require_size "$BUILD_DIR/usb_3528_patch.bin" 4
+require_size "$BUILD_DIR/hifi_frame_count_cap_patch.bin" 24
+require_size "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 16
+require_hex "$BUILD_DIR/select_output_branch.bin" 66b10114
+require_hex "$BUILD_DIR/hifi_app_branch.bin" 38bfff17
+require_hex "$BUILD_DIR/latest_max_final_stop_patch.bin" 78ffff17
+require_hex "$BUILD_DIR/latest_max_idle_rate_patch.bin" e822f8b4
+require_hex "$BUILD_DIR/usb_output_gate_branch.bin" d3160114
+require_hex "$BUILD_DIR/flinger_sync_patch.bin" 6a000014
+require_hex "$BUILD_DIR/usb_441_patch.bin" 44ac0000
+require_hex "$BUILD_DIR/usb_3528_patch.bin" 20620500
+require_hex "$BUILD_DIR/hifi_frame_count_cap_patch.bin" 087097521f00086b0030881a280380520008c81a09000014
+require_hex "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 092184522925c81a090200361f2003d5
+"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/native_hifi_select_hook.elf" \
     | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate.elf" \
     | grep -q 'There are no relocations'
-grep -a -q 'hifi_playback' "$BUILD_DIR/shared_arbiter_cave.bin"
-grep -a -q 'deep_buffer_out' "$BUILD_DIR/shared_arbiter_cave.bin"
-grep -a -q 'com.apple.android.music' "$BUILD_DIR/is_app_allowed_hook.bin"
-grep -a -q 'com.netease.cloudmusic' "$BUILD_DIR/is_app_allowed_hook.bin"
-xxd -p -c 10000 "$BUILD_DIR/preferred_hifi_cave.bin" \
-    | grep -q '63006f006d002e006100700070006c0065002e0061006e00640072006f00690064002e006d0075007300690063000000'
-xxd -p -c 10000 "$BUILD_DIR/preferred_hifi_cave.bin" \
-    | grep -q '63006f006d002e006e006500740065006100730065002e0063006c006f00750064006d0075007300690063000000'
+"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/qti_hifi_hal_patches.elf" \
+    | grep -q 'There are no relocations'
+grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.bin"
+grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.bin"
+grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.bin"
+"$LLVM_BIN/llvm-nm" -n "$BUILD_DIR/native_hifi_select_hook.elf" \
+    | grep -q '^00000000000c3a8c .* latest_max_idle_rate$'
+python3 "$ROOT_DIR/tests/native_hifi_select_model.py"
+python3 "$ROOT_DIR/tests/usb_output_gate_model.py"
 
 MODULE_STAGE="$BUILD_DIR/module"
 mkdir -p "$MODULE_STAGE/patches" "$ROOT_DIR/dist"
 cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
-cp "$BUILD_DIR/is_app_allowed_hook.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/hifi_config_branch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/preferred_hifi_branch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/preferred_hifi_cave.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/shared_arbiter_branch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/shared_arbiter_cave.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/usb_output_gate_branch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/usb_output_gate_cave.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/strategy_restore_patch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/profile_init_patch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/effect_gate_patch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/flinger_sync_patch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/hal_deep_buffer_reopen_patch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/usb_441_patch.bin" "$MODULE_STAGE/patches/"
-cp "$BUILD_DIR/usb_3528_patch.bin" "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR"/*.bin "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.6.6-alpha$' "$MODULE_STAGE/module.prop"
-grep -q 'POLICY_STOCK_SHA256=e0bd4444' "$MODULE_STAGE/customize.sh"
-grep -q 'COMPONENTS_STOCK_SHA256=2a0f70e0' "$MODULE_STAGE/customize.sh"
-grep -q 'FLINGER_STOCK_SHA256=d499d92e' "$MODULE_STAGE/customize.sh"
-grep -q 'USB_STOCK_SHA256=d36085db' "$MODULE_STAGE/customize.sh"
-grep -q 'PRIMARY_XML_STOCK_SHA256=369b5a59' "$MODULE_STAGE/customize.sh"
-grep -q 'patch_primary_xml' "$MODULE_STAGE/customize.sh"
+grep -q '^version=0.7.2-alpha$' "$MODULE_STAGE/module.prop"
+grep -q 'EXPECTED_FINGERPRINT=' "$MODULE_STAGE/customize.sh"
 grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
-grep -q 'AudioPolicyManager structural state' "$MODULE_STAGE/customize.sh"
-grep -q 'Refusing a partial or incompatible patch state' "$MODULE_STAGE/customize.sh"
-grep -q 'USB-only sampling-rate sender gate' "$MODULE_STAGE/customize.sh"
-grep -q 'mixed routes fail closed' "$MODULE_STAGE/customize.sh"
+grep -q 'Refusing an unsafe binary patch' "$MODULE_STAGE/customize.sh"
+grep -q 'KernelSU requires an active metamodule' "$MODULE_STAGE/customize.sh"
 [[ ! -e "$MODULE_STAGE/post-fs-data.sh" ]]
 [[ ! -e "$MODULE_STAGE/service.sh" ]]
-[[ ! -e "$MODULE_STAGE/mount-audio.sh" ]]
 [[ ! -e "$MODULE_STAGE/zygisk" ]]
-[[ ! -e "$MODULE_STAGE/system" ]]
-[[ ! -e "$MODULE_STAGE/vendor" ]]
-[[ ! -e "$MODULE_STAGE/odm" ]]
 sh -n "$MODULE_STAGE/customize.sh"
-python3 "$ROOT_DIR/tests/rate_arbiter_model.py"
 
 chmod 0755 "$MODULE_STAGE/customize.sh"
 chmod 0644 "$MODULE_STAGE/module.prop" "$MODULE_STAGE/README.txt" \
@@ -188,12 +168,12 @@ find "$MODULE_STAGE" -exec touch -t 202601010000 {} +
 rm -f "$ROOT_DIR/dist/$OUTPUT_NAME" "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"
 (
     cd "$MODULE_STAGE"
-    find . -type f -print | LC_ALL=C sort | zip -X -q "$ROOT_DIR/dist/$OUTPUT_NAME" -@
+    find . -type f -print | LC_ALL=C sort \
+        | zip -X -q "$ROOT_DIR/dist/$OUTPUT_NAME" -@
 )
 (
     cd "$ROOT_DIR/dist"
     sha256sum "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
 )
-
 unzip -t "$ROOT_DIR/dist/$OUTPUT_NAME"
 cat "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"

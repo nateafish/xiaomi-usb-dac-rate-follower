@@ -1,125 +1,113 @@
 #!/usr/bin/env python3
-"""Verify the policy patch against a privately supplied exact firmware ELF.
+"""Apply v0.7.2 blobs to private stock captures and verify exact regions."""
 
-The public repository intentionally does not contain Xiaomi's library. Run:
-
-    python3 tests/verify_firmware_patch.py STOCK_POLICY_SO MODULE_ZIP
-"""
-
-import hashlib
 import sys
 import zipfile
 from pathlib import Path
 
 
-V064_SHA256 = "c3747853afee1ccf0734cf144e84190c4814b88ebe3ea57d2b6ec83c779015ab"
-V065_SHA256 = "9dcedf72cb0a682f507495f1f048fc89eec614d842412964d98ebcfd635e645b"
-V066_SHA256 = "d0e6427ed9109282bf873247414f111a11a07d72cc8e5a4077cef3118bc07ff5"
-
-V064_PATCHES = {
-    "profile_init_patch.bin": 799_328,
-    "is_app_allowed_hook.bin": 867_276,
-    "strategy_restore_patch.bin": 869_060,
-    "effect_gate_patch.bin": 873_908,
-    "preferred_hifi_cave.bin": 800_684,
-    "hifi_config_branch.bin": 231_424,
-    "preferred_hifi_branch.bin": 350_044,
-}
-
-V065_PATCHES = {
-    "shared_arbiter_cave.bin": 801_064,
-    "shared_arbiter_branch.bin": 874_428,
-}
-
-V066_PATCHES = {
+POLICY_PATCHES = {
+    "native_hifi_cave.bin": 800_684,
     "usb_output_gate_cave.bin": 801_504,
+    "select_output_branch.bin": 356_884,
+    "hifi_app_branch.bin": 867_276,
     "usb_output_gate_branch.bin": 515_988,
+    "latest_max_final_stop_patch.bin": 864_416,
+    "latest_max_idle_rate_patch.bin": 865_840,
+}
+FLINGER_PATCHES = {"flinger_sync_patch.bin": 1_772_164}
+USB_PATCHES = {"usb_441_patch.bin": 29_024, "usb_3528_patch.bin": 29_052}
+HAL_PATCHES = {
+    "hifi_usecase_reconfigure_patch.bin": 2_295_956,
+    "hifi_frame_count_cap_patch.bin": 2_595_800,
 }
 
 
-def sha256(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def require_region(data: bytes, offset: int, expected_hex: str, label: str) -> None:
+def require(data: bytes, offset: int, expected_hex: str, label: str) -> None:
     expected = bytes.fromhex(expected_hex)
     actual = data[offset : offset + len(expected)]
     assert actual == expected, f"{label}: {actual.hex()} != {expected_hex}"
 
 
 def apply(data: bytes, patches: dict[str, int], archive: zipfile.ZipFile) -> bytes:
-    output = bytearray(data)
+    result = bytearray(data)
     for name, offset in patches.items():
-        patch = archive.read(f"patches/{name}")
-        output[offset : offset + len(patch)] = patch
-    return bytes(output)
+        blob = archive.read(f"patches/{name}")
+        result[offset : offset + len(blob)] = blob
+    return bytes(result)
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        raise SystemExit(f"usage: {sys.argv[0]} STOCK_POLICY_SO MODULE_ZIP")
-    stock = Path(sys.argv[1]).read_bytes()
-    assert len(stock) >= 873_924
-    assert stock[:20] == bytes.fromhex(
-        "7f454c460201010000000000000000000300b700"
+    if len(sys.argv) != 8:
+        raise SystemExit(
+            f"usage: {sys.argv[0]} POLICY FLINGER USB HAL COMPONENTS XIAOMI_IMPL MODULE_ZIP"
+        )
+    policy, flinger, usb, hal, components, impl = (
+        Path(path).read_bytes() for path in sys.argv[1:7]
     )
-    require_region(
-        stock,
-        874_412,
-        "a8024039a90a40f91f0100728303899a",
-        "arbiter pre-context",
-    )
-    require_region(
-        stock,
-        874_428,
-        "d9020036",
-        "stock arbiter instruction",
-    )
-    require_region(
-        stock,
-        874_432,
-        "62faffb042140f9160008052e1031faa",
-        "arbiter post-context",
-    )
-    require_region(stock, 515_984, "5f2403d5", "sender gate pre-context")
-    require_region(stock, 515_988, "e20a0034", "stock sender gate instruction")
-    require_region(
-        stock,
-        515_992,
-        "3f2303d5ffc301d1fd7b04a9f65705a9",
-        "sender gate post-context",
-    )
-    assert not any(stock[801_058:802_816]), "reserved executable cave is occupied"
+    archive_path = sys.argv[7]
 
-    with zipfile.ZipFile(sys.argv[2]) as archive:
-        v064 = apply(stock, V064_PATCHES, archive)
-        assert sha256(v064) == V064_SHA256
-        assert not any(v064[801_058:802_816])
+    require(policy, 356_864,
+            "a14240f9a2021291a3a20291a43300d1e00315aa", "select setup")
+    require(policy, 356_884, "bf0b0294", "stock vendor callback")
+    require(policy, 867_276, "3f2303d5", "stock app filter entry")
+    require(policy, 515_988, "e20a0034", "stock sender entry")
+    require(policy, 864_416, "acffff17", "stock final-stop result")
+    require(policy, 865_840, "a80100b4", "stock idle-rate branch")
+    assert not any(policy[800_684:801_644]), "reserved policy cave is occupied"
+    require(flinger, 1_772_164, "480d0054", "stock Mixer sync branch")
+    require(usb, 29_024, "20620500", "stock USB 352.8 slot")
+    require(usb, 29_052, "44ac0000", "stock USB 44.1 slot")
+    require(hal, 2_295_956,
+            "1f350071600000541f210071e1010054", "stock HIFI usecases")
+    require(hal, 2_595_800,
+            "087c409309058052097dc99bff0309ebc101005408c9208b",
+            "stock HIFI frame count")
+    require(components, 292_552,
+            "c0035fd681a20391e00313aaf44f49a9f54340f9fd7b47a9ff830291bf2303d5",
+            "DeviceVector layout")
+    require(impl, 377_928,
+            "08810591692a0ba9686200f9880240f968ea00f9c80000b4090140f96142079129815ef80001098b46fc00947fda01b9",
+            "mProfile layout")
 
-        v065 = apply(v064, V065_PATCHES, archive)
-        assert sha256(v065) == V065_SHA256
-        assert v065[874_428:874_432].hex() == "5bb8ff17"
-        cave = archive.read("patches/shared_arbiter_cave.bin")
-        assert len(cave) == 440
-        assert v065[801_064 : 801_064 + len(cave)] == cave
-        assert not any(v065[801_058:801_064])
-        assert not any(v065[801_064 + len(cave) : 802_816])
+    with zipfile.ZipFile(archive_path) as archive:
+        assert len(archive.read("patches/native_hifi_cave.bin")) == 744
+        assert len(archive.read("patches/usb_output_gate_cave.bin")) == 140
+        patched_policy = apply(policy, POLICY_PATCHES, archive)
+        patched_flinger = apply(flinger, FLINGER_PATCHES, archive)
+        patched_usb = apply(usb, USB_PATCHES, archive)
+        patched_hal = apply(hal, HAL_PATCHES, archive)
 
-        v066 = apply(v065, V066_PATCHES, archive)
-        assert sha256(v066) == V066_SHA256
-        assert v066[515_988:515_992].hex() == "d3160114"
-        gate = archive.read("patches/usb_output_gate_cave.bin")
-        assert len(gate) == 140
-        assert v066[801_504 : 801_504 + len(gate)] == gate
-        assert not any(v066[801_504 + len(gate) : 802_816])
+        assert len(patched_policy) == len(policy)
+        assert len(patched_flinger) == len(flinger)
+        assert len(patched_usb) == len(usb)
+        assert len(patched_hal) == len(hal)
+        require(patched_policy, 356_884, "66b10114", "patched select hook")
+        require(patched_policy, 867_276, "38bfff17", "patched app hook")
+        require(patched_policy, 515_988, "d3160114", "patched sender hook")
+        require(patched_policy, 864_416, "78ffff17", "patched final-stop result")
+        require(patched_policy, 865_840, "e822f8b4", "patched idle-rate branch")
+        require(patched_flinger, 1_772_164, "6a000014", "patched Mixer sync")
+        require(patched_usb, 29_024, "44ac0000", "patched USB 44.1 slot")
+        require(patched_usb, 29_052, "20620500", "patched USB 352.8 slot")
+        require(patched_hal, 2_295_956,
+                "092184522925c81a090200361f2003d5", "patched HIFI usecases")
+        require(patched_hal, 2_595_800,
+                "087097521f00086b0030881a280380520008c81a09000014",
+                "patched HIFI frame-count cap")
+        assert b"hifi_playback" in patched_policy[800_684:801_419]
+        assert b"com.apple.android.music" in patched_policy[800_684:801_419]
+        assert b"com.netease.cloudmusic" in patched_policy[800_684:801_419]
+        require(patched_policy, 801_420, "00709752c0035fd6", "48 kHz idle helper")
+        assert not any(patched_policy[801_428:801_504])
 
-        # Reapplying an exact patch is byte-idempotent.
-        assert apply(v066, V064_PATCHES | V065_PATCHES | V066_PATCHES, archive) == v066
+        # Exact reapplication is byte-idempotent.
+        assert apply(patched_policy, POLICY_PATCHES, archive) == patched_policy
+        assert apply(patched_flinger, FLINGER_PATCHES, archive) == patched_flinger
+        assert apply(patched_usb, USB_PATCHES, archive) == patched_usb
+        assert apply(patched_hal, HAL_PATCHES, archive) == patched_hal
 
-    print(
-        "firmware patch verification: stock -> v0.6.4 -> v0.6.5 -> "
-        "v0.6.6 passed"
-    )
+    print("firmware patch verification: stock -> v0.7.2 passed")
 
 
 if __name__ == "__main__":

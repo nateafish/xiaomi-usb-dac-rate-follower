@@ -1,68 +1,49 @@
-Xiaomi USB DAC Rate Follower v0.6.6-alpha
+Xiaomi USB DAC Rate Follower v0.7.2-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
-Android 17. The installer verifies the build fingerprint, ELF architecture,
-semantic markers, instruction context, dependent AudioPolicyComponents object
-layouts, and consistent patch state before making a systemless copy. Whole-file
-hashes are reference identifiers only.
+Android 17. The installer validates the fingerprint, ELF architecture, call
+sites, executable caves, and every object-layout offset used by the hook. A
+mixed, older, or partially patched source state is rejected before writing.
 
-The module reconnects Xiaomi's existing native Hifi path with narrow,
-firmware-pinned changes:
+This version removes the earlier Preferred Mixer, Deep Buffer, shared-arbiter,
+late-bootstrap, broad HAL, and XML experiments. It keeps a smaller native path:
 
-1. The built-in hifi_playback configuration gets a nonzero 48000 Hz bootstrap
-   rate, allowing Xiaomi's existing USB-attach callback to create it.
-2. Apple Music and NetEase media on the two USB output ports use Android's
-   existing Preferred Mixer mechanism with DEFAULT behavior to select the
-   unflagged dynamic hifi_playback profile. Repeated tracks from the same UID
-   reuse the owner record instead of resetting active-client counts.
-3. Xiaomi's existing deep_buffer_out Hifi profile is initialized without
-   globally enabling Feature 8 or changing ro.vendor.audio.hifi.config.
-4. HifiSampleRateManager allows only com.apple.android.music and
-   com.netease.cloudmusic.
-5. Deep Buffer changes from FIRST_LOCK to LATEST_MAX in its own static profile;
-   HIFI retains LATEST_MAX and VoIP retains its stock strategy.
-6. AudioFlinger synchronizes MixerThread from the HAL after every accepted
-   Hifi sampling_rate change, including 48 kHz -> 44.1 kHz and the reverse.
-7. Qualcomm PAL's fixed seven-rate priority list includes 44.1 kHz instead of
-   352.8 kHz, matching the DAC's verified native 44.1 kHz capability.
-8. Xiaomi's deep-buffer guard accepts NONE(2) and stale UNKNOWN(3), while still
-   rejecting real Dolby(0) and MiSound(1). USB is declared `usb_device:none`,
-   but Feature 8 does not propagate it into the Hifi manager's separate field.
-9. The active AIDL ODM XML restores the HIDL-era 44100/48000 PCM24 and PCM32
-   declarations on deep_buffer_out.
-10. Qualcomm's AIDL HAL sampling-rate gate includes DEEP_BUFFER_PLAYBACK(3) in
-   the same existing standby/reconfigure path as VOIP(8) and HIFI(13).
-11. A 440-byte lock-local arbiter reads Xiaomi's existing HIFI and Deep active
-   rate counters. Deep temporarily owns the shared USB backend; when it becomes
-   idle, a still-active HIFI stream regains its rate. No new state is counted.
-12. A final sender-side gate resolves the exact output handle and permits the
-   sampling_rate parameter only when every currently routed device is USB.
-   Bluetooth, speaker, wired, mixed USB/Bluetooth, empty, and unknown routes
-   fail closed and remain under Android's stock policy.
+1. AOSP runs Xiaomi's original selectOutput callback normally.
+2. For com.apple.android.music or com.netease.cloudmusic only, the final output
+   handle changes to an already-open hifi_playback descriptor when both the
+   originally selected output and HIFI output are currently USB-only.
+3. Xiaomi's existing HifiSampleRateManager receives normal HIFI start/stop
+   events and remains the only sample-rate controller.
+4. Qualcomm's seven returned USB rates include 44.1 kHz while retaining
+   352.8 kHz in the displaced priority slot.
+5. AudioFlinger reads the accepted HAL rate at the 44.1/48 kHz boundary too.
+6. The final sampling_rate sender permits writes only when every device routed
+   on that exact output is USB. Bluetooth, speaker, wired, mixed, empty, stale,
+   and duplicating routes fail closed.
+7. When Xiaomi's native LATEST_MAX HIFI count reaches zero, the same stop
+   lifecycle restores the shared USB backend to the normal 48 kHz mixer rate.
+8. Qualcomm's HIFI usecase is admitted to the existing PAL reconfiguration
+   path, and its immutable AIDL FMQ is capped at 1764/1920 frames for low-rate
+   playback instead of retaining the 15360-frame 384 kHz startup buffer.
 
-The USB/HAL mixer remains PCM32. PCM16, PCM24, or Float submitted by an app is
-handled by normal AudioFlinger conversion. This build does not claim strict
-bit identity when the app, effects, volume, or format conversion changes data.
+No output is opened or reopened by the selection hook. It allocates no object,
+creates no preference, adds no counter, and runs no daemon, polling loop,
+Zygisk code, or live audioserver restart.
 
-There is no daemon, Zygisk injection, app patch, userspace preferred-mixer
-writer, polling, or live audioserver restart. The installer makes a structural edit to
-the device's own XML copy; the ZIP ships only tiny patch blobs, not Xiaomi's
-complete system or vendor libraries.
+The USB path remains a PCM32 MixerThread and this module targets sample-rate
+following, not strict sample-bit identity. App DSP, effects, software volume,
+format conversion, and concurrent playback may still prevent bit-perfect data.
 
-This release deliberately does not add BIT_PERFECT to hifi_playback. On this
-firmware that flag selects a separate Qualcomm BIT_PERFECT_PLAYBACK usecase
-which previously entered a stream-not-configured reopen loop. Rate following
-is tested separately from strict sample-bit identity.
+Disabling NetEase crossfade does not disable AudioFlinger's protective fade
+when NetEase recreates its AudioTrack. The HAL frame-count correction targets
+the stale 320-348 ms HIFI buffer that amplified that normal transition into
+first-second swelling, missing attacks, and pops; it does not remove the safety
+fade itself.
 
-KNOWN ALPHA LIMITATION: shared-backend arbitration has passed the offline event
-model and exact-binary patch checks, but not the complete on-device transition
-matrix. This build is for controlled testing and is not yet a stable daily-use
-release.
+The idle restoration occurs when Android delivers the final native HIFI stop
+event. It does not forcibly migrate a client that remains active. NetEase also
+uses a separate Deep Buffer transition track and Android fade handling while it
+recreates its main HIFI AudioTrack; this build does not override those gains.
 
-KernelSU requires an active metamodule such as official meta-overlayfs. The
-module contains no manual bind-mount fallback. Magisk uses its standard
-systemless mount.
-
-EXPERIMENTAL: install only on the fingerprint accepted by customize.sh. Keep a
-KernelSU/Magisk recovery path available. A reboot is required to apply or
-remove the module.
+KernelSU requires an active metamodule such as meta-overlayfs. Install only on
+the exact fingerprint accepted by customize.sh and keep a recovery path.

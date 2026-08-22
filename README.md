@@ -1,197 +1,210 @@
 # Xiaomi USB DAC Rate Follower
 
-Firmware-pinned Magisk/KernelSU research module for Xiaomi 17 Ultra (`nezha`),
-Android 17 / API 37, OS `4.0.0.15.XPACNXM`.
+## 中文
 
-Version `0.6.6-alpha` repairs Xiaomi's existing native Hifi sample-rate path
-instead of building a second controller around it. It contains no daemon,
-Zygisk hook, app modification, polling loop, or live audioserver restart. A
-small in-policy hook uses Android's existing Preferred Mixer API with DEFAULT
-behavior to select Xiaomi's native `hifi_playback` path. It adds one systemless
-ODM XML overlay.
+### 项目简介
 
-## Root cause
+在 MIUI 时代，小米曾短暂为小米 9 至小米 11 的部分设备适配自适应
+采样率切换，也就是通常所说的“绕过 Android SRC”。系统底层为此实现了
+独立的 `HifiSampleRateManager`。
 
-Xiaomi already ships a `HifiSampleRateManager` in
-`/system/lib64/libaudiopolicymanagerdefault.so`. For allowed applications it
-counts active AudioTracks by source sample rate and sends
-`sampling_rate=<rate>` to the active output HAL.
+随着后续设备不再完整适配这项功能，同时高通音频底层由 HIDL 迁移至
+AIDL HAL，原有功能只留下了一套未完成适配的历史代码。在本项目测试的
+小米 17 Ultra Android 17 固件中，`hifi_playback` 会以 384 kHz 动态配置
+创建；普通 44.1/48 kHz 音轨不会正常进入该通道，而进入后又容易锁在首次
+播放曲目的采样率。残留实现的实际灵活性甚至不如完全禁用它。
 
-The device also ships an AudioFlinger Hifi synchronization path in
-`/system/lib64/libaudioflinger.so`: after the HAL accepts a rate change,
-`MixerThread` can call `readOutputParameters_l(true)`, read the real HAL rate,
-update its own sample rate, and recalculate track/buffer parameters in place.
+本模块用于修正并补齐这套原生 HIFI 链路，使指定播放器在连接 USB DAC
+时进入 `hifi_playback`，并由小米已有的 `HifiSampleRateManager` 随音轨在
+44.1、48、88.2、96 kHz 等采样率之间切换。它不使用常驻守护进程、轮询、
+Zygisk 或应用内 Hook。
 
-The stock implementation has several disconnected pieces that explain the
-hardware traces:
+> 这是针对特定固件的实验性采样率跟随模块，不是严格 Bit Perfect 声明。
 
-- Xiaomi ships static configurations for `deep_buffer_out`, `hifi_playback`,
-  and `voip_playback`. The HIFI configuration already uses `LATEST_MAX` and is
-  restricted to USB, but its default sample rate is zero. USB attachment does
-  call `createHifiProfile("hifi_playback")`; that function rejects the profile
-  with `sample rate cannot be 0`.
-- Ordinary Apple Music and NetEase tracks are still selected onto Deep Buffer.
-  Nothing installs a package-specific Preferred Mixer entry that would select
-  the unflagged, dynamic, USB-only `hifi_playback` profile.
+### 当前适配范围
 
-- Feature 6 constructs `HifiSampleRateManager`, but the shipped configuration
-  leaves Feature 8 disabled, so `deep_buffer_out` is never created. Playback
-  callbacks consequently stop at `isProfileSupported()`.
-- the Deep Buffer profile strategy is `FIRST_LOCK`, so gapless overlap can leave the first
-  song's 44.1 kHz rate pinned while a 48/96 kHz song starts;
-- the AudioFlinger synchronization branch runs only when the mixer's current
-  rate is **above** 48 kHz. It therefore handles high-rate fallback but skips
-  the exact 48 kHz ↔ 44.1 kHz boundary.
-- the USB route is correctly declared as original sound (`usb_device:none`),
-  but the Hifi manager initializes its separate `activeEffect` field to
-  `UNKNOWN(3)`. Feature 8 is disabled by this firmware's Hifi configuration,
-  so the field is not updated through `activeEffect` parameters. Stock accepts
-  only `NONE(2)` and can therefore reject an effect-free USB request.
-- the legacy HIDL policy declared `deep_buffer` at `44100 48000`, but the
-  active AIDL ODM module declares both PCM24 and PCM32 deep-buffer profiles at
-  48000 only. The AIDL HAL also triggers `standby()` for VOIP(8) and HIFI(13)
-  rate changes, but omits DEEP_BUFFER_PLAYBACK(3).
-- `sendkeySamplingRateToAHal(output, rate)` forwards `sampling_rate` without
-  checking which devices are currently routed on that output. The earlier
-  playback-event filter excludes speaker in one path but not Bluetooth, so the
-  legacy manager can re-clock a Bluetooth output and change playback speed.
+- 设备：Xiaomi 17 Ultra（`nezha`）
+- 系统：Android 17 / API 37
+- 固件：`OS4.0.0.15.XPACNXM`
+- 播放器：Apple Music、网易云音乐
+- 输出：仅 USB Audio；扬声器、蓝牙、模拟耳机和混合路由不介入
+- Root：Magisk，或启用了 metamodule（建议 `meta-overlayfs`）的 KernelSU
 
-These conditions match the observed baseline: rates above 48 kHz can
-work, while 44.1/48 kHz switching is probabilistic, stale, or speed-altering.
+安装器会核对完整系统指纹、ELF 架构、关键函数上下文、对象布局和每个补丁
+位置。其他设备或固件会直接终止安装。
 
-## The guarded patch set
+### 修正内容
 
-`0.6.6-alpha` changes only these firmware addresses and one XML node:
+1. 在系统完成原有输出选择后，仅当目标包名和当前路由都满足条件时，将
+   最终输出指向已存在的 `hifi_playback`。
+2. 将 44.1 kHz 加入高通 USB 助手实际返回的七个采样率，同时保留
+   352.8 kHz。
+3. 让 AudioFlinger 在 44.1/48 kHz 边界也重新读取 HAL 已接受的采样率，
+   避免 DAC 时钟已改变而 MixerThread 状态未更新。
+4. 允许高通 AIDL HAL 的 HIFI usecase 进入原有 PAL 设备重配置路径。
+5. 修正 HIFI 通道以 384 kHz 创建后留下的超大固定缓冲：原实现降至
+   48 kHz 后仍有 15360 帧（320 ms），降至 44.1 kHz 后约为 348 ms；模块
+   将低采样率 HIFI 缓冲限制在约 40 ms。
+6. 最后一个 HIFI 音轨释放后，通过小米原生生命周期将共享 USB 后端恢复
+   至普通应用使用的 48 kHz。
 
-| Library / offset | Stock | Patched | Purpose |
-|---|---:|---:|---|
-| `libaudiopolicymanagerdefault.so` `0x38800`, cave `0xc37ac..0xc3921` | HIFI default 0; Deep strategy 1 | HIFI default 48000; Deep strategy 0 | Complete Xiaomi's existing per-profile configuration without changing VoIP |
-| same library `0x5575c` | direct Preferred Mixer lookup | guarded branch to cave | For whitelist media on a selected USB device type, install/reuse a DEFAULT PCM32 HIFI preference |
-| `libaudiopolicymanagerdefault.so` `0xc3260` | Feature 8 early exit | `nop` | Create Xiaomi's existing `deep_buffer_out` profile without globally enabling Feature 8 |
-| `libaudiopolicymanagerdefault.so` `0xd3bcc..0xd3c8f` | Xiaomi profile/app lookup | 196-byte selective check | Allow only Apple Music and NetEase |
-| same library `0xd42c4` | per-profile strategy load | restored if an older module changed it | Keep VoIP stock; Deep/HIFI strategy comes from each static configuration |
-| same library `0xd55b4` | `b.eq 0xd55e0` | `b.hs 0xd55e0` | Accept `NONE(2)` and stale `UNKNOWN(3)` while still rejecting Dolby/MiSound |
-| same library `0xd57bc`, cave `0xc3928..0xc3adf` | per-profile `changed` test | shared HIFI/Deep arbitration | Use Xiaomi's existing active-rate counters to control the single physical USB backend |
-| same library `0x7df94`, cave `0xc3ae0..0xc3b6b` | no routed-device check | branch to 140-byte USB-only gate | Resolve the exact output handle; permit the HAL parameter only when every routed device is USB |
-| `libaudioflinger.so` `0x1b0a84` | `b.hi 0x1b0c2c` | `b 0x1b0c2c` | Synchronize MixerThread for 44.1/48 kHz too |
-| `libdev_usb.so` `0x7160`, `0x717c` | 352.8 then 44.1 kHz | 44.1 then 352.8 kHz | Put 44.1 inside PAL's seven returned rates |
-| `libaudiocorehal.qti.so` `0x230894..0x2308a3` | Reopen usecases 8/13 | Reopen usecases 3/8/13 | Let an accepted Deep Buffer rate change run the HAL's existing standby/reconfigure path |
-| active ODM primary XML, `deep_buffer_out` | PCM24/PCM32 at 48000 | PCM24/PCM32 at 44100/48000 | Restore the capability present in the legacy HIDL policy |
+所有运行时扫描都有固定上限。遇到空路由、未知设备、过期输出、混合路由
+或异常对象时，模块保持系统原选择，不发送采样率命令。
 
-The whitelist is exactly:
+### 网易云切歌第一秒异常
 
-- `com.apple.android.music`
-- `com.netease.cloudmusic`
+关闭网易云音乐的“淡入淡出”只会关闭应用自己的效果。切歌时网易云仍会
+销毁并重建主 `AudioTrack`，AudioFlinger 也会对旧轨执行系统级保护淡出。
+这部分不是应用设置能够关闭的。
 
-The HIFI route uses Android's ordinary `AUDIO_MIXER_BEHAVIOR_DEFAULT`, not
-`BIT_PERFECT`. The preference is created once per current whitelist owner and
-USB port/strategy. Repeated AudioTracks from the same UID reuse the existing
-`PreferredMixerAttributesInfo`, preserving AOSP's active-client count; a
-different whitelist UID replaces ownership only when it actually requests an
-output. Non-whitelisted UIDs ignore the preference and retain normal routing.
+本机实时日志还确认了更深层的问题：HIFI 输出已经显示为 48 kHz 时，AIDL
+共享缓冲仍保留 384 kHz 创建时的 15360 帧和 122880 字节，线程写入延迟
+约 448 ms。这个失配会把正常的轨道切换放大成第一秒音量忽大忽小、吞掉
+开头以及偶发爆音。本模块保留系统的防爆音淡出，只修正底层固定缓冲和
+采样率状态不一致的问题。
 
-The transport check is deliberately placed at the final sender. It looks up
-the callback's exact `audio_io_handle_t` in `AudioPolicyManager::mOutputs`,
-then checks the current `DeviceVector`. Only `USB_ACCESSORY`, `USB_DEVICE`, and
-`USB_HEADSET` are accepted. Unknown/empty routes, Bluetooth, speaker, wired,
-and mixed USB/Bluetooth routes fail closed without sending `sampling_rate`.
-Merely having a USB DAC attached is not sufficient.
+### PCM 与 Bit Perfect
 
-The `LATEST_MAX` strategy makes overlapping tracks deterministic: a new higher
-rate takes effect immediately; a new lower rate takes effect after the old
-higher-rate track stops. There is no timer or usage polling.
+当前验证链路是 PCM32 USB MixerThread。模块的目标是让输出采样率跟随音源，
+不会承诺源数据逐 bit 不变。以下情况仍可能破坏严格 Bit Perfect：
 
-### Alpha limitation: on-device arbitration and transport validation
+- 播放器自身 DSP、均衡器、音量标准化或淡入淡出；
+- Android 软件音量和系统音效；
+- PCM16、PCM24、Float 与 PCM32 之间的格式转换；
+- 多个应用或系统声音同时播放。
 
-The v0.6.6 patch set has passed offline binary/signature checks, six named USB
-scenarios, four non-USB fail-closed scenarios, and 24,402 balanced event
-traces, but has not yet passed the complete on-device transition matrix.
-It replaces Xiaomi's final per-profile decision with a lock-local shared
-backend arbiter: HIFI and Deep retain independent native counters; active Deep
-temporarily wins; stopping the final Deep track restores the still-active HIFI
-maximum; stopping the final selected HIFI track returns the backend to 48 kHz.
-It creates no new persistent counter or worker.
+仅声明 `AUDIO_OUTPUT_FLAG_BIT_PERFECT` 也不能解决本固件普通 44.1/48 kHz
+音轨被选到 Deep Buffer、USB 能力列表缺少 44.1 kHz，以及 HIFI 固定缓冲
+失配的问题。
 
-Treat the ZIP as a saved research candidate, not a stable release, until cold
-start, gapless 44.1/48/96 transitions, other-app takeover/release, full stop,
-and repeated reconnect tests all pass. See [TESTING.md](TESTING.md).
-
-## PCM format and “bit perfect”
-
-The tested QTI AIDL HAL path uses PCM32 as the USB mixer/output container. A
-player may submit PCM16, PCM24, PCM32, or Float; normal AudioFlinger conversion
-produces PCM32 for the HAL. This module fixes sample-rate following. It does not
-claim strict bit identity when app DSP, effects, software volume, Float
-conversion, or another processing stage changes samples.
-
-## Firmware and mount safety
-
-The ZIP does not redistribute Xiaomi system/vendor libraries. During installation it:
-
-1. requires the exact fingerprint documented above;
-2. validates ELF64/AArch64 headers, minimum sizes, semantic markers, stable
-   instruction context, and a consistent known/patch state at every offset;
-   it also verifies the unmodified AudioPolicyComponents layouts used to map
-   output handles to their current device types;
-3. validates the active ODM XML as a stock or already-patched deep-buffer node;
-4. copies the targets into the module's systemless overlay;
-5. verifies the executable cave is completely empty (or exactly matches this
-   build), applies narrow guarded binary regions, and changes only the two Deep
-   Buffer sampling-rate attributes in the XML;
-6. rereads every patched offset, verifies unchanged ELF file sizes and required
-   package strings, then reports whole-file hashes as reference identifiers.
-
-KernelSU requires an active metamodule such as official `meta-overlayfs`. There
-is intentionally no manual bind-mount fallback. Magisk uses its standard
-systemless mount mechanism.
-
-## Build
+### 构建
 
 ```sh
 ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 ```
 
-The public build runs the shared-rate model automatically. With a privately
-captured stock policy library, the exact stock → v0.6.4 → v0.6.5 → v0.6.6 binary
-transition can also be checked without installing anything:
+构建流程会生成无动态重定位的 AArch64 补丁，检查机器码、大小与安装脚本，
+运行路由安全模型，并在 `dist/` 生成可复现的 Magisk/KernelSU ZIP。
+
+### 为其他设备请求适配
+
+请勿在其他机型或固件上强行安装。提交 Issue 时请附上：
+
+- 系统与 vendor 指纹、SDK、设备代号、平台、Root 方案和 metamodule；
+- `/system/lib64/libaudiopolicymanagerdefault.so`；
+- `/system/lib64/libaudiopolicycomponents.so`；
+- `/system/lib64/libaudioflinger.so`；
+- `/system_ext/lib64/libaudiopolicymanagerimpl.so` 及其 stub 库；
+- `/vendor/lib64/libdev_usb.so` 和当前 QTI AIDL 音频 HAL；
+- 正在使用的 audio policy/module XML、VINTF manifest 与音频 init RC；
+- USB DAC 接入并播放时的 `dumpsys media.audio_policy`、
+  `dumpsys media.audio_flinger`、ALSA card/PCM 和 USB `stream0`；
+- 覆盖 44.1 → 48 → 96 → 44.1、完全停止及重新连接的日志，以及 DAC 型号
+  和数显采样率。
+
+上传前请删除与问题无关的个人信息。每个固件都需要重新核对偏移和结构。
+
+---
+
+## English
+
+### Introduction
+
+During the MIUI era, Xiaomi briefly shipped adaptive sample-rate switching on
+some devices from the Mi 9 through Mi 11. This is commonly described as
+bypassing Android SRC, and Xiaomi implemented a dedicated
+`HifiSampleRateManager` for it.
+
+Later devices stopped receiving a complete adaptation while Qualcomm migrated
+its audio stack from HIDL to the AIDL HAL. What remains is an unfinished legacy
+path. On the Xiaomi 17 Ultra Android 17 firmware tested by this project,
+`hifi_playback` is created from a 384 kHz dynamic configuration; ordinary
+44.1/48 kHz tracks do not enter it correctly, and tracks that do enter can stay
+locked to the first song's rate. In practice, the leftover implementation can
+be less flexible than disabling it entirely.
+
+This module repairs and completes that native HIFI path. When a USB DAC is
+selected, specified players are routed to `hifi_playback`, and Xiaomi's own
+`HifiSampleRateManager` follows tracks across 44.1, 48, 88.2, 96 kHz and other
+supported rates. It uses no resident daemon, polling loop, Zygisk code, or
+in-app hook.
+
+> This is a firmware-pinned experimental rate-following module, not a strict
+> bit-perfect claim.
+
+### Supported target
+
+- Device: Xiaomi 17 Ultra (`nezha`)
+- OS: Android 17 / API 37
+- Firmware: `OS4.0.0.15.XPACNXM`
+- Players: Apple Music and NetEase Cloud Music
+- Route: USB Audio only; speaker, Bluetooth, analogue and mixed routes are
+  left untouched
+- Root: Magisk, or KernelSU with an active metamodule such as `meta-overlayfs`
+
+The installer validates the full build fingerprint, ELF architecture, local
+function context, object layouts and every patch location. Any other device or
+firmware is rejected.
+
+### What it fixes
+
+1. After the stock output decision, the final handle is redirected to the
+   existing `hifi_playback` output only for an allowed package on a USB-only
+   route.
+2. 44.1 kHz is placed inside Qualcomm's seven returned USB rates while
+   retaining 352.8 kHz.
+3. AudioFlinger rereads an accepted HAL rate at the 44.1/48 kHz boundary, so
+   its MixerThread does not remain stale after the DAC clock changes.
+4. The QTI AIDL HIFI usecase is admitted to the existing PAL device
+   reconfiguration path.
+5. The immutable HIFI buffer inherited from the initial 384 kHz profile is
+   corrected. The original 15360 frames become 320 ms at 48 kHz and about
+   348 ms at 44.1 kHz; this module keeps low-rate HIFI near 40 ms.
+6. When the final HIFI track is released, Xiaomi's native lifecycle restores
+   the shared USB backend to the normal 48 kHz mixer rate.
+
+All runtime scans are bounded. Empty, stale, unknown, mixed or non-USB routes
+fail closed and keep the system's original output decision.
+
+### NetEase first-second glitches
+
+Disabling NetEase crossfade disables only the app's own effect. NetEase still
+destroys and recreates its main `AudioTrack` at a song boundary, while
+AudioFlinger applies a protective system fade to the old track.
+
+A live device dump exposed the larger defect: even after the HIFI output
+reported 48 kHz, its AIDL queue still held the 15360 frames and 122880 bytes
+chosen at 384 kHz, with roughly 448 ms thread-loop write latency. That mismatch
+magnifies a normal track transition into first-second volume pumping, missing
+attacks and occasional pops. The module keeps Android's anti-pop fade and
+repairs the fixed buffer and rate-state mismatch beneath it.
+
+### PCM and bit perfect
+
+The verified route is a PCM32 USB MixerThread. The module follows source sample
+rates but does not promise bit-identical samples. Player DSP, software volume,
+effects, PCM/Float format conversion and concurrent playback can still prevent
+strict bit-perfect output.
+
+Declaring `AUDIO_OUTPUT_FLAG_BIT_PERFECT` alone does not fix this firmware's
+low-rate Deep Buffer selection, missing 44.1 kHz USB capability, or immutable
+HIFI-buffer mismatch.
+
+### Build
 
 ```sh
-python3 tests/verify_firmware_patch.py \
-  /path/to/libaudiopolicymanagerdefault.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.6.6-alpha.zip
+ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 ```
 
-Every push to `main` builds and verifies the module. A `v*` tag publishes a
-prerelease. See [TESTING.md](TESTING.md) for the rollout procedure and
-[docs/research.md](docs/research.md) for the reverse-engineered call chain.
+The build produces relocation-free AArch64 blobs, validates instruction bytes,
+sizes and installer logic, runs fail-closed routing models, and creates a
+reproducible Magisk/KernelSU ZIP in `dist/`.
 
-## Requesting support for another device
+### Requesting another-device port
 
-Do not install this ZIP on another model or firmware. Open a GitHub issue and
-attach a ZIP or tar archive containing the following files from the target
-device. Do not attach paid application APKs or music files.
-
-- A text inventory with `ro.build.fingerprint`, `ro.vendor.build.fingerprint`,
-  SDK version, product device, board platform, `ro.vendor.audio.hifi.config`,
-  root solution/version, and active KernelSU metamodule if applicable.
-- `/system/lib64/libaudiopolicymanagerdefault.so`
-- `/system/lib64/libaudiopolicycomponents.so`
-- `/system/lib64/libaudioflinger.so`
-- `/vendor/lib64/libdev_usb.so`
-- `/vendor/bin/hw/audiohalservice.qti` and
-  `/vendor/lib64/hw/libaudiocorehal.qti.so` when present.
-- Relevant files under `/vendor/etc/audio`, `/odm/etc/audio`, the active
-  `audio_policy_configuration.xml`, audio VINTF manifests, and audio init RCs.
-- `dumpsys media.audio_policy`, `dumpsys media.audio_flinger`, `/proc/asound/cards`,
-  `/proc/asound/pcm`, and `/proc/asound/card*/stream0` while the DAC is attached.
-- A logcat captured from starting one verified 44.1 kHz track, switching to a
-  48 kHz track, and stopping playback. Include the player package name, DAC
-  model, displayed rates, expected result, and actual result in the issue.
-
-Remove unrelated personal log lines before uploading. Each supported firmware
-needs its own reviewed target manifest: library paths, ELF/semantic markers,
-instruction-context signatures, patch offsets, and accepted pre-patch states.
-Whole-file hashes are reference identifiers, not the sole compatibility gate.
-
-This is an experimental, exact-firmware alpha—not a universal Android
-bit-perfect module.
+Do not force-install this ZIP on another device or firmware. Open an Issue with
+the build/vendor fingerprints, SDK, device/platform and root setup; the policy,
+AudioFlinger, QTI USB and AIDL HAL libraries listed in the Chinese section;
+active audio XML/VINTF/init files; AudioPolicy and AudioFlinger dumps; ALSA and
+USB descriptors; and logs covering 44.1 → 48 → 96 → 44.1, full stop and USB
+reconnection. Remove unrelated personal information before uploading.
