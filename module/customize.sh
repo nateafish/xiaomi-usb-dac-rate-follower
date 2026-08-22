@@ -162,6 +162,11 @@ require_hex "$POLICY_SOURCE" 864420 16 \
 require_hex "$POLICY_SOURCE" 865824 16 \
     1f0100712001881ac0035fd6081040f9 \
     'LATEST_MAX active-rate pre-context'
+require_one_of_hex "$POLICY_SOURCE" 873596 4 \
+    '1f050071 91b9ff17' 'HIFI idle-rate caller hook'
+require_hex "$POLICY_SOURCE" 873600 12 \
+    a1000054692345291f010071 \
+    'HIFI idle-rate caller post-context'
 require_hex "$POLICY_SOURCE" 865844 16 \
     098c41f8a90000b4e80309aa290540f9 \
     'LATEST_MAX active-rate post-context'
@@ -200,7 +205,7 @@ require_one_of_hex "$POLICY_SOURCE" 867276 4 \
 require_one_of_hex "$POLICY_SOURCE" 515988 4 \
     'e20a0034 d3160114' 'USB-only sampling-rate sender gate'
 require_one_of_hex "$POLICY_SOURCE" 864416 4 \
-    'acffff17 78ffff17' 'LATEST_MAX final-stop update result'
+    'acffff17 78ffff17 86c2ff17' 'LATEST_MAX final-stop update result'
 require_one_of_hex "$POLICY_SOURCE" 865840 4 \
     'a80100b4 e822f8b4 17c1ff17' 'LATEST_MAX idle-rate branch'
 require_one_of_hex "$POLICY_SOURCE" 432224 4 \
@@ -237,13 +242,20 @@ NATIVE_V073_PREFIX_SIZE=736
 NATIVE_V073_HELPER_OFFSET=801420
 NATIVE_V073_HELPER_SIZE=8
 NATIVE_V073_HELPER_HEX=00709752c0035fd6
+NATIVE_V074_SIZE=780
 NATIVE_CAVE_SIZE=$(stat -c '%s' "$MODPATH/patches/native_hifi_cave.bin" 2>/dev/null)
-[ "$NATIVE_CAVE_SIZE" = 780 ] \
+[ "$NATIVE_CAVE_SIZE" = 788 ] \
     || abort "! Native HIFI hook has an unexpected build size"
 NATIVE_REMAINDER_OFFSET=$((NATIVE_CAVE_OFFSET + NATIVE_CAVE_SIZE))
 NATIVE_REMAINDER_SIZE=$((NATIVE_CAVE_CAPACITY - NATIVE_CAVE_SIZE))
 if region_matches_file "$POLICY_SOURCE" "$NATIVE_CAVE_OFFSET" \
         "$MODPATH/patches/native_hifi_cave.bin"; then
+    native_cave_state=v075
+elif region_matches_prefix_file "$POLICY_SOURCE" "$NATIVE_CAVE_OFFSET" \
+        "$MODPATH/patches/native_hifi_cave.bin" "$NATIVE_V074_SIZE" \
+        && region_is_zero "$POLICY_SOURCE" \
+            $((NATIVE_CAVE_OFFSET + NATIVE_V074_SIZE)) \
+            $((NATIVE_CAVE_SIZE - NATIVE_V074_SIZE)); then
     native_cave_state=v074
 elif region_matches_prefix_file "$POLICY_SOURCE" "$NATIVE_CAVE_OFFSET" \
         "$MODPATH/patches/native_hifi_cave.bin" "$NATIVE_V073_PREFIX_SIZE" \
@@ -263,6 +275,18 @@ elif region_is_zero "$POLICY_SOURCE" "$NATIVE_CAVE_OFFSET" "$NATIVE_CAVE_CAPACIT
     native_cave_state=stock
 else
     abort "! Native HIFI executable cave is occupied or partially patched"
+fi
+
+HIFI_IDLE_CAVE_OFFSET=801472
+HIFI_IDLE_CAVE_SIZE=32
+if region_matches_file "$POLICY_SOURCE" "$HIFI_IDLE_CAVE_OFFSET" \
+        "$MODPATH/patches/hifi_idle_rate_cave.bin"; then
+    hifi_idle_cave_state=patched
+elif region_is_zero "$POLICY_SOURCE" "$HIFI_IDLE_CAVE_OFFSET" \
+        "$HIFI_IDLE_CAVE_SIZE"; then
+    hifi_idle_cave_state=stock
+else
+    abort "! HIFI idle-rate executable cave is occupied or partially patched"
 fi
 
 USB_GATE_CAVE_OFFSET=801504
@@ -293,6 +317,7 @@ app_state=$(read_hex "$POLICY_SOURCE" 867276 4)
 gate_state=$(read_hex "$POLICY_SOURCE" 515988 4)
 latest_stop_state=$(read_hex "$POLICY_SOURCE" 864416 4)
 idle_rate_state=$(read_hex "$POLICY_SOURCE" 865840 4)
+idle_caller_state=$(read_hex "$POLICY_SOURCE" 873596 4)
 default_rate_state=$(read_hex "$POLICY_SOURCE" 432224 4)
 case "$default_rate_state:$hifi_default_cave_state" in
     e0e340fd:stock) hifi_default_state=stock ;;
@@ -310,7 +335,19 @@ case "$select_state:$app_state:$native_cave_state:$gate_state:$usb_gate_cave_sta
         module_state=v073 ;;
     66b10114:38bfff17:v074:d3160114:patched:6a000014:44ac0000:20620500:78ffff17:17c1ff17)
         module_state=v074 ;;
+    66b10114:38bfff17:v075:d3160114:patched:6a000014:44ac0000:20620500:86c2ff17:17c1ff17)
+        module_state=v075 ;;
     *) abort "! Refusing a mixed, older, or incompatible patch state" ;;
+esac
+case "$idle_caller_state" in
+    1f050071) idle_caller_state=stock ;;
+    91b9ff17) idle_caller_state=patched ;;
+    *) abort "! Refusing an unknown HIFI idle-rate caller state" ;;
+esac
+case "$idle_caller_state:$hifi_idle_cave_state" in
+    stock:stock) ;;
+    patched:patched) ;;
+    *) abort "! Refusing a mixed HIFI idle-rate caller patch state" ;;
 esac
 
 hal_usecase_state=$(read_hex "$HAL_SOURCE" 2295956 16)
@@ -355,7 +392,7 @@ if [ "$module_state" = stock ]; then
     write_patch "$MODPATH/patches/usb_441_patch.bin" "$USB_DEST" 29024
     write_patch "$MODPATH/patches/usb_3528_patch.bin" "$USB_DEST" 29052
 fi
-if [ "$module_state" != v074 ]; then
+if [ "$module_state" != v075 ]; then
     write_patch "$MODPATH/patches/native_hifi_cave.bin" "$POLICY_DEST" "$NATIVE_CAVE_OFFSET"
     write_patch "$MODPATH/patches/latest_max_final_stop_patch.bin" "$POLICY_DEST" 864416
     write_patch "$MODPATH/patches/latest_max_idle_rate_patch.bin" "$POLICY_DEST" 865840
@@ -365,6 +402,12 @@ if [ "$hifi_default_state" = stock ]; then
         "$POLICY_DEST" "$HIFI_DEFAULT_CAVE_OFFSET"
     write_patch "$MODPATH/patches/hifi_dynamic_default_branch.bin" \
         "$POLICY_DEST" 432224
+fi
+if [ "$idle_caller_state" = stock ]; then
+    write_patch "$MODPATH/patches/hifi_idle_rate_cave.bin" \
+        "$POLICY_DEST" "$HIFI_IDLE_CAVE_OFFSET"
+    write_patch "$MODPATH/patches/hifi_idle_rate_branch.bin" \
+        "$POLICY_DEST" 873596
 fi
 if [ "$hal_state" = stock ]; then
     write_patch "$MODPATH/patches/hifi_usecase_reconfigure_patch.bin" \
@@ -386,17 +429,20 @@ fi
 require_hex "$POLICY_DEST" 356884 4 66b10114 'patched native selectOutput hook'
 require_hex "$POLICY_DEST" 867276 4 38bfff17 'patched HIFI app filter hook'
 require_hex "$POLICY_DEST" 515988 4 d3160114 'patched USB sender gate'
-require_hex "$POLICY_DEST" 864416 4 78ffff17 \
-    'patched LATEST_MAX final-stop update result'
+require_hex "$POLICY_DEST" 864416 4 86c2ff17 \
+    'patched LATEST_MAX final-stop idle rate branch'
 require_hex "$POLICY_DEST" 865840 4 17c1ff17 \
     'patched LATEST_MAX idle-rate branch'
+require_hex "$POLICY_DEST" 873596 4 91b9ff17 \
+    'patched HIFI idle-rate caller hook'
 require_hex "$POLICY_DEST" 432224 4 c3680114 \
     'patched HIFI 48 kHz dynamic default hook'
 region_matches_file "$POLICY_DEST" "$NATIVE_CAVE_OFFSET" \
     "$MODPATH/patches/native_hifi_cave.bin" \
     || abort "! Native HIFI cave verification failed"
-region_is_zero "$POLICY_DEST" "$NATIVE_REMAINDER_OFFSET" "$NATIVE_REMAINDER_SIZE" \
-    || abort "! Native HIFI hook overflowed its reserved cave"
+region_matches_file "$POLICY_DEST" "$HIFI_IDLE_CAVE_OFFSET" \
+    "$MODPATH/patches/hifi_idle_rate_cave.bin" \
+    || abort "! HIFI idle-rate cave verification failed"
 region_matches_file "$POLICY_DEST" "$USB_GATE_CAVE_OFFSET" \
     "$MODPATH/patches/usb_output_gate_cave.bin" \
     || abort "! USB sender-gate cave verification failed"

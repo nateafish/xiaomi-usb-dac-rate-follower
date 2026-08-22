@@ -1,13 +1,13 @@
 # Controlled test plan
 
-`0.7.4-alpha` must pass offline verification before any device installation.
+`0.7.6-alpha` must pass offline verification before any device installation.
 Do not live-replace audio libraries or restart audioserver manually.
 
 ## Offline gate
 
 The build must confirm:
 
-- all AArch64 branch encodings and the 744-byte native cave;
+- all AArch64 branch encodings and the 788-byte native cave;
 - no unresolved relocations;
 - the 140-byte final USB sender gate;
 - the 86-byte HIFI-only dynamic-default hook;
@@ -26,7 +26,7 @@ python3 tests/verify_firmware_patch.py \
   libaudiocorehal.qti.so \
   libaudiopolicycomponents.so \
   libaudiopolicymanagerimpl.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.7.4-alpha.zip
+  dist/xiaomi-usb-dac-rate-follower-v0.7.6-alpha.zip
 ```
 
 ## Installation gate

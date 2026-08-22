@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.7.4-alpha
+VERSION=0.7.6-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -56,6 +56,8 @@ require_hex() {
     --section-start=.hifi_app_branch=0xd3bcc \
     --section-start=.latest_max_final_stop_patch=0xd30a0 \
     --section-start=.latest_max_idle_rate_patch=0xd3630 \
+    --section-start=.hifi_idle_rate_branch=0xd547c \
+    --section-start=.hifi_idle_rate_cave=0xc3ac0 \
     --section-start=.native_hifi_cave=0xc37ac \
     --defsym=VENDOR_SELECT_OUTPUT_STUB=0xda110 \
     --defsym=SELECT_OUTPUT_RETURN=0x57218 \
@@ -63,6 +65,10 @@ require_hex() {
     --defsym=LATEST_MAX_TRUE_RETURN=0xd2e80 \
     --defsym=LATEST_MAX_RATE_CONTINUE=0xd3634 \
     --defsym=LATEST_MAX_RATE_EMPTY_RETURN=0xd3664 \
+    --defsym=PROFILE_ALL_STOPPED=0xd366c \
+    --defsym=HIFI_IDLE_RATE_FIRST_LOCK=0xd5484 \
+    --defsym=HIFI_IDLE_RATE_STOCK=0xd5494 \
+    --defsym=HIFI_IDLE_RATE_CONTINUE=0xd54d4 \
     "$BUILD_DIR/native_hifi_select_hook.o" \
     -o "$BUILD_DIR/native_hifi_select_hook.elf"
 "$LLVM_BIN/llvm-objcopy" \
@@ -70,6 +76,8 @@ require_hex() {
     --dump-section .hifi_app_branch="$BUILD_DIR/hifi_app_branch.bin" \
     --dump-section .latest_max_final_stop_patch="$BUILD_DIR/latest_max_final_stop_patch.bin" \
     --dump-section .latest_max_idle_rate_patch="$BUILD_DIR/latest_max_idle_rate_patch.bin" \
+    --dump-section .hifi_idle_rate_branch="$BUILD_DIR/hifi_idle_rate_branch.bin" \
+    --dump-section .hifi_idle_rate_cave="$BUILD_DIR/hifi_idle_rate_cave.bin" \
     --dump-section .native_hifi_cave="$BUILD_DIR/native_hifi_cave.bin" \
     "$BUILD_DIR/native_hifi_select_hook.elf"
 
@@ -125,7 +133,9 @@ require_hex() {
 
 require_size "$BUILD_DIR/select_output_branch.bin" 4
 require_size "$BUILD_DIR/hifi_app_branch.bin" 4
-require_size "$BUILD_DIR/native_hifi_cave.bin" 780
+require_size "$BUILD_DIR/native_hifi_cave.bin" 788
+require_size "$BUILD_DIR/hifi_idle_rate_branch.bin" 4
+require_size "$BUILD_DIR/hifi_idle_rate_cave.bin" 32
 require_size "$BUILD_DIR/latest_max_final_stop_patch.bin" 4
 require_size "$BUILD_DIR/latest_max_idle_rate_patch.bin" 4
 require_size "$BUILD_DIR/hifi_dynamic_default_branch.bin" 4
@@ -139,10 +149,11 @@ require_size "$BUILD_DIR/hifi_frame_count_stock.bin" 24
 require_size "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 16
 require_hex "$BUILD_DIR/select_output_branch.bin" 66b10114
 require_hex "$BUILD_DIR/hifi_app_branch.bin" 38bfff17
-require_hex "$BUILD_DIR/latest_max_final_stop_patch.bin" 78ffff17
+require_hex "$BUILD_DIR/latest_max_final_stop_patch.bin" 86c2ff17
 require_hex "$BUILD_DIR/latest_max_idle_rate_patch.bin" 17c1ff17
 require_hex "$BUILD_DIR/hifi_dynamic_default_branch.bin" c3680114
 require_hex "$BUILD_DIR/usb_output_gate_branch.bin" d3160114
+require_hex "$BUILD_DIR/hifi_idle_rate_branch.bin" 91b9ff17
 require_hex "$BUILD_DIR/flinger_sync_patch.bin" 6a000014
 require_hex "$BUILD_DIR/usb_441_patch.bin" 44ac0000
 require_hex "$BUILD_DIR/usb_3528_patch.bin" 20620500
@@ -164,6 +175,7 @@ grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.bin"
 python3 "$ROOT_DIR/tests/native_hifi_select_model.py"
 python3 "$ROOT_DIR/tests/usb_output_gate_model.py"
 python3 "$ROOT_DIR/tests/hifi_dynamic_default_model.py"
+python3 "$ROOT_DIR/tests/hifi_idle_rate_model.py"
 
 MODULE_STAGE="$BUILD_DIR/module"
 mkdir -p "$MODULE_STAGE/patches" "$ROOT_DIR/dist"
@@ -171,7 +183,7 @@ cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
 cp "$BUILD_DIR"/*.bin "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.7.4-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.7.6-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'EXPECTED_FINGERPRINT=' "$MODULE_STAGE/customize.sh"
 grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
 grep -q 'Refusing an unsafe binary patch' "$MODULE_STAGE/customize.sh"

@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.7.4-alpha
+Xiaomi USB DAC Rate Follower v0.7.6-alpha
 
 Exact-firmware research build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM on
 Android 17. The installer validates the fingerprint, ELF architecture, call

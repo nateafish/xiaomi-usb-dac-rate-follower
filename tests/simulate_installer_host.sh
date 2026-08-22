@@ -81,13 +81,16 @@ cmp "$PATCHED_HAL" "$SECOND/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
 V073_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v073.so"
 cp "$PATCHED_POLICY" "$V073_POLICY"
+printf '%s' 78ffff17 \
+    | xxd -r -p \
+    | dd of="$V073_POLICY" bs=1 seek=864416 conv=notrunc status=none
 printf '%s' e822f8b4 \
     | xxd -r -p \
     | dd of="$V073_POLICY" bs=1 seek=865840 conv=notrunc status=none
 printf '%s' 00709752c0035fd6 \
     | xxd -r -p \
     | dd of="$V073_POLICY" bs=1 seek=801420 conv=notrunc status=none
-dd if=/dev/zero of="$V073_POLICY" bs=1 seek=801428 count=36 conv=notrunc status=none
+dd if=/dev/zero of="$V073_POLICY" bs=1 seek=801428 count=44 conv=notrunc status=none
 
 V073_UPGRADE="$TEST_ROOT/v073-upgrade"
 prepare_module "$V073_UPGRADE" "$V073_POLICY" "$PATCHED_FLINGER" "$PATCHED_USB" "$PATCHED_HAL"
@@ -101,13 +104,16 @@ printf '%s' 087097521f00086b0030881a280380520008c81a09000014 \
     | dd of="$V072_HAL" bs=1 seek=2595800 conv=notrunc status=none
 V072_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v072.so"
 cp "$PATCHED_POLICY" "$V072_POLICY"
+printf '%s' 78ffff17 \
+    | xxd -r -p \
+    | dd of="$V072_POLICY" bs=1 seek=864416 conv=notrunc status=none
 printf '%s' e822f8b4 \
     | xxd -r -p \
     | dd of="$V072_POLICY" bs=1 seek=865840 conv=notrunc status=none
 printf '%s' 00709752c0035fd6 \
     | xxd -r -p \
     | dd of="$V072_POLICY" bs=1 seek=801420 conv=notrunc status=none
-dd if=/dev/zero of="$V072_POLICY" bs=1 seek=801428 count=36 conv=notrunc status=none
+dd if=/dev/zero of="$V072_POLICY" bs=1 seek=801428 count=44 conv=notrunc status=none
 printf '%s' e0e340fd \
     | xxd -r -p \
     | dd of="$V072_POLICY" bs=1 seek=432224 conv=notrunc status=none
@@ -119,4 +125,16 @@ run_installer "$UPGRADE"
 cmp "$PATCHED_POLICY" "$UPGRADE/system/lib64/libaudiopolicymanagerdefault.so"
 cmp "$PATCHED_HAL" "$UPGRADE/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
-echo "host installer simulation: stock, reapply, v0.7.3 upgrade, and v0.7.2 recovery passed"
+V074_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v074.so"
+cp "$PATCHED_POLICY" "$V074_POLICY"
+printf '%s' 78ffff17 \
+    | xxd -r -p \
+    | dd of="$V074_POLICY" bs=1 seek=864416 conv=notrunc status=none
+dd if=/dev/zero of="$V074_POLICY" bs=1 seek=801464 count=8 conv=notrunc status=none
+
+V074_UPGRADE="$TEST_ROOT/v074-upgrade"
+prepare_module "$V074_UPGRADE" "$V074_POLICY" "$PATCHED_FLINGER" "$PATCHED_USB" "$PATCHED_HAL"
+run_installer "$V074_UPGRADE"
+cmp "$PATCHED_POLICY" "$V074_UPGRADE/system/lib64/libaudiopolicymanagerdefault.so"
+
+echo "host installer simulation: stock, reapply, v0.7.4 upgrade, v0.7.3 upgrade, and v0.7.2 recovery passed"

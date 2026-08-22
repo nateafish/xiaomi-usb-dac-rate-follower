@@ -18,6 +18,9 @@
 .extern LATEST_MAX_TRUE_RETURN
 .extern LATEST_MAX_RATE_CONTINUE
 .extern LATEST_MAX_RATE_EMPTY_RETURN
+.extern PROFILE_ALL_STOPPED
+.extern HIFI_IDLE_RATE_STOCK
+.extern HIFI_IDLE_RATE_CONTINUE
 
 .section .select_output_branch, "ax"
 .p2align 2
@@ -35,10 +38,12 @@ hifi_app_branch:
 .p2align 2
 .global latest_max_final_stop_patch
 latest_max_final_stop_patch:
-    // Xiaomi's stock LATEST_MAX path returns false when its final active-rate
-    // count disappears.  Report a real change so handlePlaybackEvent() asks
-    // getActiveSampleRate() for the idle rate and sends it to the same output.
-    b       LATEST_MAX_TRUE_RETURN
+    // The final-stop path has already loaded the retained rate-tree node into
+    // w22 before it checks the application-count list.  That node can be the
+    // synthetic 384 kHz default, so changing getActiveSampleRate() alone is
+    // too late.  Replace it only for the no-real-application branch, then
+    // keep Xiaomi's normal hardware-update flow.
+    b       latest_max_idle_transition
 
 .section .latest_max_idle_rate_patch, "ax"
 .p2align 2
@@ -48,6 +53,29 @@ latest_max_idle_rate_patch:
     // application stops, so testing only the active-rate tree is insufficient.
     // Consult the existing application-count list before choosing an idle rate.
     b       latest_max_idle_rate
+
+.section .hifi_idle_rate_branch, "ax"
+.p2align 2
+.global hifi_idle_rate_branch
+hifi_idle_rate_branch:
+    b       hifi_idle_rate_hook
+
+.section .hifi_idle_rate_cave, "ax"
+.p2align 2
+.global hifi_idle_rate_hook
+hifi_idle_rate_hook:
+    // handlePlaybackEvent() has just updated LATEST_MAX.  Its following
+    // inline tree lookup can still see Xiaomi's retained 384 kHz node after
+    // the final stop.  Ask the existing lifecycle predicate before that
+    // lookup; active applications continue through the stock path.
+    cmp     w8, #1
+    b.eq    HIFI_IDLE_RATE_FIRST_LOCK
+    cbz     w25, HIFI_IDLE_RATE_STOCK
+    add     x0, x27, #0x28
+    bl      PROFILE_ALL_STOPPED
+    cbz     w0, HIFI_IDLE_RATE_STOCK
+    mov     w26, #48000
+    b       HIFI_IDLE_RATE_CONTINUE
 
 .section .native_hifi_cave, "ax"
 .p2align 2
@@ -292,3 +320,13 @@ latest_max_idle_rate:
 .Lidle_return_48:
     mov     w0, #48000
     ret
+
+.p2align 2
+.global latest_max_idle_transition
+latest_max_idle_transition:
+    // w22 is the rate selected by updateLatestMaxStrategy().  At this point
+    // the application-count list is empty, so the only valid idle rate is the
+    // ordinary USB mixer rate.  The caller still needs a true change result
+    // to send it through the native callback.
+    mov     w22, #48000
+    b       LATEST_MAX_TRUE_RETURN

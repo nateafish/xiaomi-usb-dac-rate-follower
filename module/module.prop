@@ -1,6 +1,6 @@
 id=xiaomi-usb-dac-rate-follower
 name=Xiaomi USB DAC Rate Follower
-version=0.7.4-alpha
-versionCode=26
+version=0.7.6-alpha
+versionCode=28
 author=nateafish
 description=Firmware-pinned native hifi_playback selection and rate following for Apple Music and NetEase, including native 48 kHz idle restoration after HIFI release. No daemon or Zygisk. Experimental.
