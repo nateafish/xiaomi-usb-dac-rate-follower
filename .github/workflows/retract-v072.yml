@@ -1,0 +1,20 @@
+name: Retract unsafe v0.7.2 alpha
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/retract-v072.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  retract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete unsafe release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete v0.7.2-alpha --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
