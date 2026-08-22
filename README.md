@@ -1,7 +1,7 @@
-# Xiaomi 17 USB Whitelist Rate Follower
+# Xiaomi USB DAC Rate Follower
 
-Device-specific Magisk/KernelSU research module for the Xiaomi 17 Android 17
-Qualcomm AIDL audio stack.
+Device-specific Magisk/KernelSU research module for the Xiaomi 17 Ultra
+Android 17 Qualcomm AIDL audio stack.
 
 Version `0.3.1-alpha` enables Xiaomi/AOSP's built-in deep-buffer sample-rate
 manager, adds 44.1 kHz to the ordinary `deep_buffer_out` mixer, and activates
@@ -52,4 +52,5 @@ bash scripts/build.sh
 ```
 
 Every push to `main` builds and verifies the ZIP. Tags matching `v*` also
-publish a GitHub Release. See `docs/research.md` for reverse-engineering notes.
+publish a GitHub Release. See [TESTING.md](TESTING.md) for the exact test
+baseline and `docs/research.md` for reverse-engineering notes.
