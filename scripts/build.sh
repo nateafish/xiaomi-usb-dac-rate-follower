@@ -70,6 +70,9 @@ require_size() {
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/android-16/qti_hifi_reconfigure.S" \
     -o "$BUILD_DIR/a16_qti_hifi_reconfigure.o"
+"$CLANG" --target=aarch64-linux-android35 -c \
+    "$ROOT_DIR/patches/android-16/pudding_sampling_rate_handler.S" \
+    -o "$BUILD_DIR/a16_pudding_sampling_rate_handler.o"
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .a16_native_hifi_route="$BUILD_DIR/a16_native_hifi_route.template.bin" \
     "$BUILD_DIR/a16_native_hifi_route.o"
@@ -79,6 +82,9 @@ require_size() {
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .a16_qti_hifi_reconfigure="$BUILD_DIR/a16_qti_hifi_reconfigure.template.bin" \
     "$BUILD_DIR/a16_qti_hifi_reconfigure.o"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .a16_pudding_sampling_rate_handler="$BUILD_DIR/a16_pudding_sampling_rate_handler.template.bin" \
+    "$BUILD_DIR/a16_pudding_sampling_rate_handler.o"
 
 require_size "$BUILD_DIR/native_hifi_cave.template.bin" 788
 require_size "$BUILD_DIR/hifi_idle_rate_cave.template.bin" 32
@@ -88,6 +94,7 @@ require_size "$BUILD_DIR/usb_output_arbitration_cave.template.bin" 292
 require_size "$BUILD_DIR/a16_native_hifi_route.template.bin" 640
 require_size "$BUILD_DIR/a16_hifi_dynamic_default.template.bin" 86
 require_size "$BUILD_DIR/a16_qti_hifi_reconfigure.template.bin" 16
+require_size "$BUILD_DIR/a16_pudding_sampling_rate_handler.template.bin" 256
 grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.template.bin"

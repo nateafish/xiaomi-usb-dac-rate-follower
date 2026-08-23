@@ -2,18 +2,26 @@
 
 ## 中文
 
-面向 Xiaomi 17 Ultra Android 17 的 USB DAC 自适应采样率模块。指定播放器
-通过系统原生 `hifi_playback` 路径输出，采样率可随音轨在 44.1、48、88.2、
-96、176.4、192 和 384 kHz 之间切换。
+面向 Xiaomi 17 系列 Qualcomm AIDL 音频栈的 USB DAC 自适应采样率模块。
+当前实机目标为 Xiaomi 17 Ultra Android 17；指定播放器通过系统原生
+`hifi_playback` 路径输出，采样率可随音轨在 44.1、48、88.2、96、176.4、
+192 和 384 kHz 之间切换。
 
 ### 适配范围
 
-- 已验证设备：Xiaomi 17 Ultra（`nezha`）
-- 系统：Android 17 / API 37
-- 已验证固件：`OS4.0.0.15.XPACNXM`
-- 播放器：Apple Music、网易云音乐
-- 输出：USB Audio
-- Root：Magisk，或带有效 metamodule 的 KernelSU
+| 机型 | 代号 | 系统 / 固件基线 | 验证状态 | 模块状态 | 适配类型 |
+| --- | --- | --- | --- | --- | --- |
+| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **实机验证** | 可安装 | 原生 HIFI 管理器修复 + Nezha AIDL HAL |
+| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 暂不开放安装 | Nezha 原生 `HifiPlayback` / usecase guard |
+| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 暂不开放安装 | Pudding 指针布局 `sampling_rate` handler |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 暂不开放安装 | Nezha 系统 policy + Pudding 类 HAL handler |
+
+“实机验证”表示已在设备、USB DAC 和实际播放器上测试；“理论适配”表示已从
+完整 OTA 提取目标库，并通过语义注入、分支重定位和两次应用幂等验证，但没有
+对应实机。理论适配不等于已经确认音频稳定性或严格 Bit Perfect。
+
+当前实机验证播放器为 Apple Music、网易云音乐，输出为 USB Audio。Root 支持
+Magisk，或带有效 metamodule 的 KernelSU。
 
 扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。其他 Qualcomm Android 17
 AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一代码签名、对象布局
@@ -65,7 +73,17 @@ PLT、对象布局和可执行空洞共同确认。安装时会重新计算文�
 未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示醒目警告，然后继续
 执行全部结构检查；零命中、多命中、未知布局或混合补丁状态都会中止。Android 16
 方案已经通过 OTA 提取库的离线注入和幂等验证，但尚未实机验证，因此当前安装器
-仍会主动阻止 Android 16 安装。
+仍会主动阻止 Android 16 安装。Xiaomi 17（`pudding`）Android 16 也已完成
+离线移植：它缺少的 `HifiPlayback` 只是静态帧数 helper，而无 flag 的
+`hifi_playback` 已由 QTI 原生映射到等价的 Deep Buffer usecase 3。模块不复制
+Nezha 类或虚表，而是在 Pudding 自己的 `MiStreamOutPrimary` 中恢复被裁掉的
+`sampling_rate` 更新、PAL standby 和下次写入重开流程。该目标仍需实机验证，
+所以保持为不可安装基线。
+
+Xiaomi 17 Pro Max（`popsicle`）Android 16 是混合基线：系统 policy 与 Nezha
+相同，Qualcomm USB 服务与 Pudding 相同，核心 HAL 虽然是独立构建，但完整匹配
+Pudding 的指针对象布局和 rate handler 语义。它已通过两次离线应用幂等验证，
+同样因为没有实机而保持不可安装。
 
 ### 适配其他设备
 
@@ -144,18 +162,28 @@ bash scripts/collect_device_port.sh
 
 ## English
 
-An adaptive sample-rate module for USB DAC playback on the Xiaomi 17 Ultra
-running Android 17. Supported players use the native `hifi_playback` path and
+An adaptive USB DAC sample-rate module for the Qualcomm AIDL audio stack used
+by the Xiaomi 17 family. The current hardware-verified target is Xiaomi 17
+Ultra on Android 17. Supported players use the native `hifi_playback` path and
 can follow tracks between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 
-### Supported target
+### Compatibility status
 
-- Verified device: Xiaomi 17 Ultra (`nezha`)
-- OS: Android 17 / API 37
-- Verified firmware: `OS4.0.0.15.XPACNXM`
-- Players: Apple Music and NetEase Cloud Music
-- Output: USB Audio
-- Root: Magisk or KernelSU with an active metamodule
+| Model | Codename | OS / firmware baseline | Validation | Module status | Adaptation type |
+| --- | --- | --- | --- | --- | --- |
+| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **Hardware verified** | Installable | Native HIFI manager fixes + Nezha AIDL HAL |
+| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)** | Installation disabled | Native Nezha `HifiPlayback` / usecase guard |
+| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)** | Installation disabled | Pudding pointer-layout `sampling_rate` handler |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)** | Installation disabled | Nezha system policy + Pudding-family HAL handler |
+
+“Hardware verified” means testing on the device with a USB DAC and real
+players. “Theoretical” means the complete OTA was extracted and passed
+semantic injection, branch relocation and two-pass idempotence checks without
+corresponding hardware. It does not confirm runtime stability or strict
+bit-perfect output.
+
+Hardware testing currently covers Apple Music and NetEase Cloud Music over
+USB Audio. Root support is Magisk or KernelSU with an active metamodule.
 
 Speaker, Bluetooth, analogue and mixed routes are left untouched. Other
 Qualcomm Android 17 AIDL audio baselines receive an unverified warning and may
@@ -217,6 +245,19 @@ only when every structural check passes. Zero or multiple signature matches,
 unknown layouts and mixed patch states abort. The Android 16 target passes
 offline injection and idempotence tests against the extracted OTA libraries,
 but remains blocked from device installation until it is tested on hardware.
+The Xiaomi 17 (`pudding`) Android 16 baseline has reusable policy, MixerThread
+and USB structures. Its missing `HifiPlayback` symbol is only a static frame
+count helper; QTI already maps the flagless `hifi_playback` profile to the
+equivalent Deep Buffer usecase 3. The port therefore restores the compiled-out
+`sampling_rate` update and native standby/reopen path inside Pudding's own
+`MiStreamOutPrimary` instead of copying Nezha classes or vtables. It remains
+non-installable until hardware validation is complete.
+
+The Xiaomi 17 Pro Max (`popsicle`) Android 16 OTA is a hybrid baseline: its
+system policy matches Nezha, its Qualcomm USB service matches Pudding, and its
+separately built core HAL matches every Pudding pointer-layout and rate-handler
+semantic check. It passes two-pass offline validation and remains
+non-installable because no hardware is available.
 
 ### Porting requests
 

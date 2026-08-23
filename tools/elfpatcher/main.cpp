@@ -352,6 +352,36 @@ class ElfFile {
         return value;
     }
 
+    uint64_t caveAfter(uint64_t anchor, uint64_t anchorSize,
+                       uint64_t requiredSize, uint64_t alignment) const {
+        if (anchorSize == 0 || requiredSize == 0 || alignment == 0 ||
+            (alignment & (alignment - 1)) != 0) {
+            throw std::runtime_error("invalid executable-cave geometry");
+        }
+        requireRange(anchor, anchorSize);
+        if (!isExecutableRange(anchor, anchorSize)) {
+            throw std::runtime_error("cave anchor is not executable");
+        }
+        if (anchor > std::numeric_limits<uint64_t>::max() - anchorSize) {
+            throw std::runtime_error("cave anchor overflows");
+        }
+        const uint64_t after = anchor + anchorSize;
+        if (after > std::numeric_limits<uint64_t>::max() - (alignment - 1)) {
+            throw std::runtime_error("cave alignment overflows");
+        }
+        const uint64_t start = (after + alignment - 1) & ~(alignment - 1);
+        requireRange(start, requiredSize);
+        if (!isExecutableRange(start, requiredSize)) {
+            throw std::runtime_error(
+                    "required cave does not fit in the anchor's executable segment");
+        }
+        if (!std::all_of(data_.begin() + after, data_.begin() + start,
+                         [](uint8_t value) { return value == 0; })) {
+            throw std::runtime_error("non-zero alignment padding after cave anchor");
+        }
+        return start;
+    }
+
     std::string buildId() const {
         for (const auto& program : programs_) {
             if (program.type != kPtNote) continue;
@@ -557,6 +587,7 @@ void usage() {
         << "  elfpatcher plt ELF NAME\n"
         << "  elfpatcher branch-target ELF OFFSET\n"
         << "  elfpatcher word ELF OFFSET\n"
+        << "  elfpatcher cave-after ELF ANCHOR ANCHOR_SIZE REQUIRED_SIZE ALIGNMENT\n"
         << "  elfpatcher replace ELF DOMAIN PATTERN DELTA REPLACEMENT\n"
         << "  elfpatcher assert-zero ELF OFFSET SIZE exec|load\n"
         << "  elfpatcher branch ELF FROM_OFFSET TO_OFFSET B|BL\n"
@@ -634,6 +665,14 @@ int main(int argc, char** argv) {
         if (command == "word" && argc == 4) {
             const uint64_t offset = parseNumber(argv[3]);
             std::cout << "0x" << std::hex << elf.read32(offset) << "\n";
+            return 0;
+        }
+
+        if (command == "cave-after" && argc == 7) {
+            const uint64_t result = elf.caveAfter(
+                    parseNumber(argv[3]), parseNumber(argv[4]),
+                    parseNumber(argv[5]), parseNumber(argv[6]));
+            std::cout << "0x" << std::hex << result << "\n";
             return 0;
         }
 

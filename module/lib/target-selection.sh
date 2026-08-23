@@ -110,6 +110,11 @@ select_audio_target() {
         TARGET_DEVICE_VERIFIED=1
         ui_print "- Recorded device baseline: $BASELINE_ID"
         ui_print "- Device tuple: $device / $soc / $board"
+        if [ "${BASELINE_INSTALLABLE:-0}" != 1 ]; then
+            ui_print "! Baseline status: ${BASELINE_STATUS:-unknown}"
+            ui_print "! Patch profile: ${BASELINE_PATCH_PROFILE:-not-enabled}"
+            abort "! $BASELINE_ID is retained for research, not installation"
+        fi
     else
         [ "${COMPAT_ALLOW_UNVERIFIED:-0}" = 1 ] \
             || abort "! This device/SoC tuple is not enabled"

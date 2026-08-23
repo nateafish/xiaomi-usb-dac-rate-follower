@@ -7,6 +7,9 @@ AudioFlinger/HAL generation, and the use cases required by that baseline.
 Each Android directory contains shared `usecases/` plus compact `baselines/`
 records. A baseline is one exact device / SoC / board tuple, so adding another
 device cannot accidentally create a cross-product match with existing lists.
+Each exact baseline also has its own installation status. A recorded port that
+has passed offline structural validation but not hardware validation remains
+visible for research while the installer blocks it before staging any files.
 `target.conf` defines two support tiers:
 
 - `verified`: a recorded Android major version, device and SoC/HAL baseline.

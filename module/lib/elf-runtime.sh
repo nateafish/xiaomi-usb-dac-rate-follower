@@ -34,6 +34,21 @@ ep_plt() {
     echo "$ep_result"
 }
 
+ep_cave_after() {
+    ep_file=$1
+    ep_anchor=$2
+    ep_anchor_size=$3
+    ep_required_size=$4
+    ep_alignment=$5
+    ep_label=$6
+    if ! ep_result=$($ELFPATCHER cave-after "$ep_file" "$ep_anchor" \
+            "$ep_anchor_size" "$ep_required_size" "$ep_alignment" 2>&1); then
+        ui_print "! $ep_label: $ep_result" >&2
+        return 1
+    fi
+    echo "$ep_result"
+}
+
 offset_add() {
     echo $(( $1 + $2 ))
 }

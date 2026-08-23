@@ -214,6 +214,55 @@ slots. Thus a single active source-rate track, MixerThread and PAL can converge
 after each native rate event; simultaneous tracks at different rates still
 require SRC by definition.
 
+## Android 16 Pudding HAL port
+
+Pudding and Nezha use the same Android 16 / SM8850 / QTI AIDL generation, but
+their C++ object layouts are not ABI-compatible. Nezha embeds its
+`AudioPortConfig`; Pudding stores pointers to both `AudioPortConfig` and a
+cached PAL attribute block. Copying the Nezha handler or vtable would therefore
+write into unrelated Pudding state.
+
+The apparent missing `HifiPlayback` class does not need to be transplanted.
+Its only Nezha symbol is a static `getFrameCount()` helper, and its 40 ms frame
+calculation is identical to Pudding's existing `DeepBufferPlayback` helper.
+QTI's public AIDL source and Pudding's machine code both map an output with no
+flags to `DEEP_BUFFER_PLAYBACK` (usecase 3), matching Pudding's flagless
+`hifi_playback` policy port.
+
+What Pudding actually compiled out is the `sampling_rate` block in
+`MiStreamOutPrimary::setVendorParameters()`. The Pudding-specific payload:
+
+- accepts only 44.1/48 kHz families through 352.8/384 kHz;
+- updates cached PAL sample rate at `+0x40`;
+- sets `AudioPortConfig.sampleRate` value at `+0x8` and its discriminator at
+  `+0xc`;
+- for live usecase 3 only, uses Pudding's own configure mutex and concrete
+  `standby()`; and
+- returns to the stock parameter destruction and status path.
+
+The payload lives in a linker-owned executable zero gap whose owner call,
+geometry and emptiness are verified before use. The hook, object fields, PLT
+calls and concrete standby symbol are resolved from semantic signatures at
+installation time. Pudding and Nezha OTA libraries both pass two-pass offline
+idempotence tests, while a deliberately mixed Pudding layout fails closed.
+
+### Popsicle variant
+
+Xiaomi 17 Pro Max (`popsicle`) Android 16 is a hybrid of the two recorded
+baselines. Its policy manager, policy components and Xiaomi policy
+implementation are byte-identical to Nezha Android 16; its Qualcomm USB library
+and audio HAL service are byte-identical to Pudding. AudioFlinger and the core
+QTI HAL have separate Build IDs.
+
+The distinct core HAL still resolves every Pudding-specific pointer-layout
+anchor: `AudioPortConfig*`, cached PAL attributes, configure mutex, sample-rate
+field/discriminator, usecase tag, PAL handle and the linker-owned executable
+gap. Its flagless ODM `hifi_playback` port maps to Deep Buffer usecase 3 and it
+also lacks the static `HifiPlayback` helper. The correct adaptation is therefore
+the Pudding-family `sampling_rate` handler combined with the common semantic
+policy/MixerThread/USB patches. Two-pass offline application is byte-idempotent;
+hardware behavior remains unverified.
+
 ## Idle 384 kHz retention
 
 Live `0.7.3-alpha` logs exposed a separate Xiaomi lifecycle defect. After the
