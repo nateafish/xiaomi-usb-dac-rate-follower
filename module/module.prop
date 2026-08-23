@@ -3,4 +3,4 @@ name=Xiaomi USB DAC Rate Follower
 version=0.7.8-alpha
 versionCode=30
 author=nateafish
-description=Firmware-pinned native hifi_playback selection and rate following for Apple Music and NetEase, with activity-aware USB handoff after HIFI release. No daemon or Zygisk. Experimental.
+description=Semantically matched native hifi_playback selection and USB DAC rate following for Apple Music and NetEase. No daemon or Zygisk. Experimental.

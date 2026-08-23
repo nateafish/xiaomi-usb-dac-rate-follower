@@ -64,6 +64,8 @@ copy_root_file() {
 
 save_text state/build.txt \
     'getprop; printf "\\n=== uname ===\\n"; uname -a; printf "\\n=== id ===\\n"; id; printf "\\n=== root tools ===\\n"; command -v su; su -V 2>/dev/null || true; magisk -V 2>/dev/null || true; ksud -V 2>/dev/null || true'
+save_text state/target-identity.txt \
+    'printf "=== primary identity ===\\n"; for p in ro.system.build.version.sdk ro.system.build.version.release ro.build.version.sdk ro.build.version.release ro.product.device ro.product.system.device ro.product.odm.device ro.product.vendor.device ro.board.platform ro.soc.manufacturer ro.soc.model ro.boot.hardware ro.boot.hardware.sku ro.vendor.build.version.incremental ro.odm.build.version.incremental ro.product.build.version.incremental ro.system.build.version.incremental; do printf "%s=" "$p"; getprop "$p"; done; printf "\\n=== audio HAL generation ===\\n"; grep -RniE "<hal format=\\\"(aidl|hidl)\\\">|android.hardware.audio.(core|effect)|android.hardware.audio@" /vendor/etc/vintf /odm/etc/vintf /system/etc/vintf /system_ext/etc/vintf 2>/dev/null || true; printf "\\n=== audio services ===\\n"; service list 2>/dev/null | grep -iE "android.hardware.audio|audio.core|audio.effect" || true; printf "\\n=== loaded audio service executables ===\\n"; for d in /proc/[0-9]*; do cmd=$(tr "\\000" " " < "$d/cmdline" 2>/dev/null); case "$cmd" in *audioserver*|*audiohal*|*hardware.audio*|*audio.service*) printf "%s: %s\\n" "${d##*/}" "$cmd"; readlink "$d/exe" 2>/dev/null;; esac; done'
 save_text state/services.txt \
     'service list; printf "\\n=== binder audio services ===\\n"; dumpsys -l | grep -iE "audio|sound" || true; printf "\\n=== lshal audio ===\\n"; lshal 2>/dev/null | grep -iE "audio|effect" || true'
 save_text state/processes.txt \
@@ -73,7 +75,7 @@ save_text state/root-overlay.txt \
 save_text state/properties.txt \
     'getprop | grep -iE "audio|sound|usb|vendor|sku|product" || true'
 save_text state/vintf.txt \
-    'find /vendor/etc/vintf /odm/etc/vintf /system/etc/vintf -maxdepth 4 -type f -print -exec grep -HniE "audio|effect" {} \; 2>/dev/null || true'
+    'find /vendor/etc/vintf /odm/etc/vintf /system/etc/vintf /system_ext/etc/vintf /product/etc/vintf -maxdepth 4 -type f -print -exec grep -HniE "audio|effect" {} \; 2>/dev/null || true'
 save_text state/init-audio.txt \
     'find /vendor/etc/init /odm/etc/init /system/etc/init -maxdepth 3 -type f -print -exec grep -HniE "audio|agm|pal" {} \; 2>/dev/null || true'
 save_text state/library-inventory.txt \
@@ -98,7 +100,8 @@ done < <(remote 'find /system/lib /system/lib64 /system_ext/lib /system_ext/lib6
     -name "libaudiopolicymanagerdefault.so" -o -name "libaudiopolicycomponents.so" -o \
     -name "libaudiopolicymanagerimpl.so" -o -iname "*audiopolicymanager*stub*.so" -o \
     -name "libaudioclient.so" -o -name "libaudiopolicyservice.so" -o \
-    -name "libaudioflinger.so" -o -name "libdev_usb.so" -o \
+    -name "libaudioflinger.so" -o -name "libaudioflingerimpl.so" -o \
+    -name "libdev_usb.so" -o \
     -iname "*audioplatformconverter*.so" -o -iname "*audiocorehal*.so" -o \
     -iname "*audioaidl*.so" -o -iname "*audiohal*.so" -o \
     -iname "audio.primary*.so" -o -iname "audio.usb*.so" -o \

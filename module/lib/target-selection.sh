@@ -1,0 +1,141 @@
+#!/system/bin/sh
+
+prop_first() {
+    for prop_name in "$@"; do
+        prop_value=$(getprop "$prop_name")
+        [ -n "$prop_value" ] && {
+            echo "$prop_value"
+            return 0
+        }
+    done
+    return 1
+}
+
+is_qualcomm_platform() {
+    manufacturer=$(getprop ro.soc.manufacturer)
+    hardware=$(getprop ro.boot.hardware)
+    platform=$(getprop ro.board.platform)
+    case "$manufacturer:$hardware:$platform" in
+        QTI:*:*|Qualcomm:*:*|*:qcom:*|*:*:canoe|*:*:kalama|*:*:pineapple) return 0 ;;
+    esac
+    grep -R -q 'vendor/qcom\|libaudiocorehal\.qti\|audiohalservice\.qti' \
+        /vendor/etc/vintf /odm/etc/vintf /vendor/etc/init /odm/etc/init \
+        2>/dev/null
+}
+
+detect_audio_core_aidl_major() {
+    for manifest in $(list_vintf_device_manifests); do
+        grep -q 'android.hardware.audio.core' "$manifest" 2>/dev/null \
+            || continue
+        awk '
+            /<name>[[:space:]]*android.hardware.audio.core[[:space:]]*<\/name>/ {
+                audio_core = 1
+            }
+            audio_core && /<version>[[:space:]]*[0-9]+[[:space:]]*<\/version>/ {
+                value = $0
+                sub(/^.*<version>[[:space:]]*/, "", value)
+                sub(/[[:space:]]*<\/version>.*$/, "", value)
+                print value
+                exit
+            }
+        ' "$manifest"
+    done | sort -n | tail -n 1
+}
+
+select_audio_target() {
+    compatibility_file=$MODPATH/targets/common/compatibility.conf
+    [ -r "$compatibility_file" ] \
+        || abort "! Missing common compatibility policy"
+    . "$compatibility_file" \
+        || abort "! Cannot load common compatibility policy"
+
+    android_release=$(prop_first ro.system.build.version.release \
+        ro.build.version.release) || abort "! Cannot detect Android release"
+    android_major=${android_release%%.*}
+    TARGET_DIR=$MODPATH/targets/android-$android_major
+    [ -r "$TARGET_DIR/target.conf" ] \
+        || abort "! No target manifest for Android $android_major"
+    . "$TARGET_DIR/target.conf" \
+        || abort "! Cannot load the Android $android_major target manifest"
+
+    android_sdk=$(prop_first ro.system.build.version.sdk \
+        ro.build.version.sdk) || abort "! Cannot detect Android SDK"
+    [ "$android_sdk" = "$TARGET_ANDROID_SDK" ] \
+        || abort "! Android SDK does not match $TARGET_ID"
+    case "${COMPAT_REQUIRE_PLATFORM:-qualcomm}:$TARGET_PLATFORM_FAMILY" in
+        qualcomm:qualcomm)
+            is_qualcomm_platform \
+                || abort "! $TARGET_ID requires a Qualcomm audio platform"
+            ;;
+        *) abort "! Unsupported target platform policy" ;;
+    esac
+    actual_hal=$(detect_audio_hal_generation)
+    [ "$actual_hal" = "$TARGET_HAL_GENERATION" ] \
+        || abort "! Audio HAL generation is $actual_hal, expected $TARGET_HAL_GENERATION"
+
+    if [ -n "${TARGET_REQUIRED_AIDL_CORE_MAJOR:-}" ]; then
+        actual_aidl_major=$(detect_audio_core_aidl_major)
+        [ "$actual_aidl_major" = "$TARGET_REQUIRED_AIDL_CORE_MAJOR" ] \
+            || abort "! Audio Core AIDL is v${actual_aidl_major:-unknown}, expected v$TARGET_REQUIRED_AIDL_CORE_MAJOR"
+    fi
+
+    device=$(getprop ro.product.device)
+    soc=$(getprop ro.soc.model)
+    board=$(getprop ro.board.platform)
+    TARGET_DEVICE_VERIFIED=0
+    matched_baseline=
+    baseline_directory=$TARGET_DIR/${TARGET_BASELINE_DIR:-baselines}
+    for baseline_file in "$baseline_directory"/*.conf; do
+        [ -r "$baseline_file" ] || continue
+        if (
+            unset BASELINE_DEVICE BASELINE_SOC_MODEL BASELINE_BOARD_PLATFORM
+            . "$baseline_file" || exit 1
+            [ "$device" = "$BASELINE_DEVICE" ] \
+                && [ "$soc" = "$BASELINE_SOC_MODEL" ] \
+                && [ "$board" = "$BASELINE_BOARD_PLATFORM" ]
+        ); then
+            [ -z "$matched_baseline" ] \
+                || abort "! Multiple recorded device baselines matched"
+            matched_baseline=$baseline_file
+        fi
+    done
+    if [ -n "$matched_baseline" ]; then
+        . "$matched_baseline" || abort "! Cannot load recorded device baseline"
+        [ "$BASELINE_HAL_GENERATION" = "$actual_hal" ] \
+            || abort "! Recorded baseline HAL generation is inconsistent"
+        if [ -n "${TARGET_REQUIRED_AIDL_CORE_MAJOR:-}" ]; then
+            [ "$BASELINE_AUDIO_CORE_MAJOR" = "$actual_aidl_major" ] \
+                || abort "! Recorded baseline Audio Core version is inconsistent"
+        fi
+        TARGET_DEVICE_VERIFIED=1
+        ui_print "- Recorded device baseline: $BASELINE_ID"
+        ui_print "- Device tuple: $device / $soc / $board"
+    else
+        [ "${COMPAT_ALLOW_UNVERIFIED:-0}" = 1 ] \
+            || abort "! This device/SoC tuple is not enabled"
+        ui_print "! WARNING: this device/SoC tuple has not been tested"
+        ui_print "! Detected: ${device:-unknown} / ${soc:-unknown} / ${board:-unknown}"
+        ui_print "! Installation continues only after every semantic ELF check passes"
+        ui_print "! Confirm USB DAC rates and audio stability yourself after reboot"
+    fi
+
+    if [ "${TARGET_INSTALLABLE:-0}" != 1 ]; then
+        ui_print "! Target status: ${TARGET_STATUS:-unknown}"
+        ui_print "! Its use cases are retained for offline porting, not device installation"
+        abort "! $TARGET_ID is not enabled for installation yet"
+    fi
+    ui_print "- Selected target: $TARGET_ID (${TARGET_STATUS:-unknown})"
+}
+
+overlay_destination_for() {
+    source_path=$1
+    if [ "${KSU:-}" = true ] || [ -x /data/adb/ksud ]; then
+        echo "$MODPATH$source_path"
+        return
+    fi
+    case "$source_path" in
+        /system/*) echo "$MODPATH/system/${source_path#/system/}" ;;
+        /*) echo "$MODPATH/system$source_path" ;;
+        *) return 1 ;;
+    esac
+}

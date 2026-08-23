@@ -1,5 +1,5 @@
-name: Device / firmware port request
-description: Request a reviewed target manifest for another Android device or firmware.
+name: Device / audio baseline port request
+description: Request validation of another Android, SoC and audio HAL baseline.
 title: "[Port] <device> <firmware>"
 labels:
   - port-request
@@ -7,12 +7,14 @@ body:
   - type: markdown
     attributes:
       value: |
-        Do not install an existing build on an unlisted firmware. Remove unrelated personal log lines, and do not upload paid app APKs or music files.
+        An unlisted device may match a compatible Qualcomm baseline, but it is
+        not a verified target. Remove unrelated personal log lines, and do not
+        upload paid app APKs or music files.
   - type: input
     id: device
     attributes:
-      label: Device and firmware
-      description: Include model, product device, Android version, and full build fingerprint.
+      label: Device, SoC and Android version
+      description: Include model, product device, SDK, ro.soc.model, ro.board.platform, firmware incremental and full build fingerprint.
     validations:
       required: true
   - type: input
@@ -49,9 +51,10 @@ body:
     attributes:
       label: Audio stack classification
       description: |-
-        State whether the device uses AIDL, HIDL, or both. List the detected
-        HAL service name, audio HAL library, USB library, and any audio-related
-        libraries shown in audioserver/audio HAL process maps.
+        State whether the device uses AIDL, HIDL, or both, including the
+        interface version. List the SoC/board platform, detected HAL service,
+        core/primary HAL library, USB library, and audio-related libraries
+        shown in audioserver/audio HAL process maps.
     validations:
       required: true
   - type: textarea
@@ -69,7 +72,7 @@ body:
     attributes:
       label: Safety confirmation
       options:
-        - label: I understand that each firmware needs a separately reviewed offset/signature manifest.
+        - label: I understand that a compatible-baseline warning is not a claim that my device was tested, and I will verify the result myself.
           required: true
         - label: I removed unrelated personal log data and did not attach copyrighted app or music content.
           required: true

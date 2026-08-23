@@ -8,15 +8,16 @@
 
 ### 适配范围
 
-- 设备：Xiaomi 17 Ultra（`nezha`）
+- 已验证设备：Xiaomi 17 Ultra（`nezha`）
 - 系统：Android 17 / API 37
-- 固件：`OS4.0.0.15.XPACNXM`
+- 已验证固件：`OS4.0.0.15.XPACNXM`
 - 播放器：Apple Music、网易云音乐
 - 输出：USB Audio
 - Root：Magisk，或带有效 metamodule 的 KernelSU
 
-扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。安装器会验证设备指纹、
-ELF 架构、关键代码上下文和补丁位置。不匹配时会终止安装。
+扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。其他 Qualcomm Android 17
+AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一代码签名、对象布局
+和补丁空间全部吻合时才允许继续；指纹和整库哈希仅用于诊断。
 
 ### 特性
 
@@ -32,7 +33,10 @@ ELF 架构、关键代码上下文和补丁位置。不匹配时会终止安装�
 
 输出目标：采样率跟随。严格 Bit Perfect 不在本项目保证范围内。
 
-本模块仅适用于上述设备和固件。
+系统分区升级后不要直接覆盖安装模块。安装器检测到 system、vendor、odm 或
+product 版本变化时会保持旧模块不动并中止；请卸载模块、重启到原始系统后再安装。
+同一系统上的模块升级会优先使用 Magisk 分区镜像，KernelSU 则使用当前模块
+payload 作为已验证的升级基线，不会在模块中保存整套 stock SO。
 
 ### 已验证基线
 
@@ -48,6 +52,20 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 ```
 
 构建产物位于 `dist/`。
+
+### 目标与智能匹配
+
+仓库以 Android 大版本组织目标：`targets/android-16` 和
+`targets/android-17`。每个版本下的 `baselines/` 保存完整的设备、SoC、board
+platform、AIDL/HIDL 世代和接口版本组合，`usecases/` 保存可复用的修改方案；
+每条实际修改则由函数局部签名、动态符号、
+PLT、对象布局和可执行空洞共同确认。安装时会重新计算文件位置并重定位 AArch64
+分支，不把研究时记录的文件偏移当作写入地址。
+
+未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示醒目警告，然后继续
+执行全部结构检查；零命中、多命中、未知布局或混合补丁状态都会中止。Android 16
+方案已经通过 OTA 提取库的离线注入和幂等验证，但尚未实机验证，因此当前安装器
+仍会主动阻止 Android 16 安装。
 
 ### 适配其他设备
 
@@ -121,8 +139,8 @@ bash scripts/collect_device_port.sh
 至少包含 `AudioPolicy`、`AudioFlinger`、AIDL/HIDL HAL、PAL/AGM、ALSA、USB
 和采样率关键字。不要上传 APK、歌曲文件或与音频问题无关的完整 logcat。
 
-各设备和各固件需要单独核对 ELF 架构、代码上下文、版本和补丁位置。只有
-拿到对应的 stock 库，才能判断旧 HIDL 路径是否存在可迁移的实现。
+新设备和新 Android/HAL 基线仍需提供 stock 库以验证语义签名与对象布局；不再
+要求为每个固件手工维护一组裸偏移。旧 HIDL 路径必须按独立 use case 分析。
 
 ## English
 
@@ -132,16 +150,18 @@ can follow tracks between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 
 ### Supported target
 
-- Device: Xiaomi 17 Ultra (`nezha`)
+- Verified device: Xiaomi 17 Ultra (`nezha`)
 - OS: Android 17 / API 37
-- Firmware: `OS4.0.0.15.XPACNXM`
+- Verified firmware: `OS4.0.0.15.XPACNXM`
 - Players: Apple Music and NetEase Cloud Music
 - Output: USB Audio
 - Root: Magisk or KernelSU with an active metamodule
 
-Speaker, Bluetooth, analogue and mixed routes are left untouched. The
-installer validates the build fingerprint, ELF architecture, code context and
-patch locations, and aborts on a mismatch.
+Speaker, Bluetooth, analogue and mixed routes are left untouched. Other
+Qualcomm Android 17 AIDL audio baselines receive an unverified warning and may
+continue only when the ELF architecture, unique code signatures, object
+layouts and executable patch space all match. Fingerprints and whole-file
+hashes are diagnostic only.
 
 ### Features
 
@@ -158,7 +178,12 @@ patch locations, and aborts on a mismatch.
 Output target: sample-rate following. Strict bit-perfect output is outside the
 project's guarantee.
 
-This module is limited to the device and firmware listed above.
+Do not install an update over a module that survived a system-partition OTA.
+If the system, vendor, ODM or product version changed, the installer leaves the
+old module untouched and aborts; uninstall it, reboot into the unmodified
+system, then reinstall. Same-system module updates use Magisk's partition
+mirror when available, or the active KernelSU module payload as a validated
+upgrade base. Full stock libraries are not duplicated inside the module.
 
 ### Verified baseline
 
@@ -174,6 +199,24 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 ```
 
 Build artifacts are written to `dist/`.
+
+### Targets and semantic matching
+
+Targets are grouped by Android major version under `targets/android-16` and
+`targets/android-17`. Each version keeps exact device / SoC / board / HAL
+tuples in `baselines/` and reusable patch plans in `usecases/`. Device,
+SoC, board platform, AIDL/HIDL generation and interface version select a
+candidate baseline. Each write is then authorized
+by function-local signatures, dynamic symbols, PLT entries, independently
+verified object layouts and executable cave checks from the matching
+`usecases/` directory. Runtime AArch64 branches are relocated against the
+actual ELF; research offsets are never used as write addresses.
+
+An unrecorded Qualcomm device receives a prominent warning and may continue
+only when every structural check passes. Zero or multiple signature matches,
+unknown layouts and mixed patch states abort. The Android 16 target passes
+offline injection and idempotence tests against the extracted OTA libraries,
+but remains blocked from device installation until it is tested on hardware.
 
 ### Porting requests
 
@@ -197,5 +240,5 @@ Include active audio policy/module XML, policy-engine XML, VINTF manifests,
 audio init RC files, AudioPolicy and AudioFlinger dumps, ALSA and USB state,
 and logs covering 44.1 -> 48 -> 96 -> 44.1 kHz, stop, and DAC reconnect. State
 the DAC model, displayed rate, PCM format, effects/Dolby status, and observed
-result. Do not upload APKs, music, or unrelated full logcat. Every device and
-firmware needs a separate signature and offset review.
+result. Do not upload APKs, music, or unrelated full logcat. Every new baseline
+still requires complete semantic and layout validation before it is verified.

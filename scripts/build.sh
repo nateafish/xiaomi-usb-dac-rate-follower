@@ -39,184 +39,115 @@ require_size() {
     }
 }
 
-require_hex() {
-    local file=$1 expected=$2 actual
-    actual=$(xxd -p "$file")
-    [[ "$actual" == "$expected" ]] || {
-        echo "unexpected bytes for $file: $actual (expected $expected)" >&2
-        exit 1
-    }
-}
-
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/native_hifi_select_hook.S" \
     -o "$BUILD_DIR/native_hifi_select_hook.o"
-"$LLVM_BIN/ld.lld" --entry=native_hifi_select_hook \
-    --section-start=.select_output_branch=0x57214 \
-    --section-start=.hifi_app_branch=0xd3bcc \
-    --section-start=.latest_max_final_stop_patch=0xd30a0 \
-    --section-start=.latest_max_idle_rate_patch=0xd3630 \
-    --section-start=.hifi_idle_rate_branch=0xd547c \
-    --section-start=.hifi_idle_rate_cave=0xc3ac0 \
-    --section-start=.native_hifi_cave=0xc37ac \
-    --defsym=VENDOR_SELECT_OUTPUT_STUB=0xda110 \
-    --defsym=SELECT_OUTPUT_RETURN=0x57218 \
-    --defsym=HIFI_APP_STOCK_CONTINUE=0xd3bd0 \
-    --defsym=LATEST_MAX_TRUE_RETURN=0xd2e80 \
-    --defsym=LATEST_MAX_RATE_CONTINUE=0xd3634 \
-    --defsym=LATEST_MAX_RATE_EMPTY_RETURN=0xd3664 \
-    --defsym=PROFILE_ALL_STOPPED=0xd366c \
-    --defsym=HIFI_IDLE_RATE_FIRST_LOCK=0xd5484 \
-    --defsym=HIFI_IDLE_RATE_STOCK=0xd5494 \
-    --defsym=HIFI_IDLE_RATE_CONTINUE=0xd54d4 \
-    "$BUILD_DIR/native_hifi_select_hook.o" \
-    -o "$BUILD_DIR/native_hifi_select_hook.elf"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .select_output_branch="$BUILD_DIR/select_output_branch.bin" \
-    --dump-section .hifi_app_branch="$BUILD_DIR/hifi_app_branch.bin" \
-    --dump-section .latest_max_final_stop_patch="$BUILD_DIR/latest_max_final_stop_patch.bin" \
-    --dump-section .latest_max_idle_rate_patch="$BUILD_DIR/latest_max_idle_rate_patch.bin" \
-    --dump-section .hifi_idle_rate_branch="$BUILD_DIR/hifi_idle_rate_branch.bin" \
-    --dump-section .hifi_idle_rate_cave="$BUILD_DIR/hifi_idle_rate_cave.bin" \
-    --dump-section .native_hifi_cave="$BUILD_DIR/native_hifi_cave.bin" \
-    "$BUILD_DIR/native_hifi_select_hook.elf"
+    --dump-section .native_hifi_cave="$BUILD_DIR/native_hifi_cave.template.bin" \
+    --dump-section .hifi_idle_rate_cave="$BUILD_DIR/hifi_idle_rate_cave.template.bin" \
+    "$BUILD_DIR/native_hifi_select_hook.o"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/hifi_dynamic_default.S" \
     -o "$BUILD_DIR/hifi_dynamic_default.o"
-"$LLVM_BIN/ld.lld" --entry=hifi_dynamic_default_hook \
-    --section-start=.hifi_dynamic_default_branch=0x69860 \
-    --section-start=.hifi_dynamic_default_cave=0xc3b6c \
-    --defsym=HIFI_DYNAMIC_DEFAULT_RETURN=0x69864 \
-    "$BUILD_DIR/hifi_dynamic_default.o" \
-    -o "$BUILD_DIR/hifi_dynamic_default.elf"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .hifi_dynamic_default_branch="$BUILD_DIR/hifi_dynamic_default_branch.bin" \
-    --dump-section .hifi_dynamic_default_cave="$BUILD_DIR/hifi_dynamic_default_cave.bin" \
-    "$BUILD_DIR/hifi_dynamic_default.elf"
+    --dump-section .hifi_dynamic_default_cave="$BUILD_DIR/hifi_dynamic_default_cave.template.bin" \
+    "$BUILD_DIR/hifi_dynamic_default.o"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/usb_output_gate.S" -o "$BUILD_DIR/usb_output_gate.o"
-"$LLVM_BIN/ld.lld" --entry=usb_output_gate \
-    --section-start=.usb_output_gate_branch=0x7df94 \
-    --section-start=.usb_output_gate_cave=0xc3ae0 \
-    --section-start=.usb_output_arbitration_cave=0xc3bc4 \
-    --defsym=SENDKEY_BODY=0x7df98 \
-    --defsym=SENDKEY_ZERO_PATH=0x7e0f0 \
-    --defsym=IS_USB_ONLY_OUTPUT=0xc3994 \
-    --defsym=OUTPUT_IS_ACTIVE=0xda260 \
-    "$BUILD_DIR/usb_output_gate.o" -o "$BUILD_DIR/usb_output_gate.elf"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .usb_output_gate_branch="$BUILD_DIR/usb_output_gate_branch.bin" \
-    --dump-section .usb_output_gate_cave="$BUILD_DIR/usb_output_gate_cave.bin" \
-    --dump-section .usb_output_arbitration_cave="$BUILD_DIR/usb_output_arbitration_cave.bin" \
-    "$BUILD_DIR/usb_output_gate.elf"
+    --dump-section .usb_output_gate_cave="$BUILD_DIR/usb_output_gate_cave.template.bin" \
+    --dump-section .usb_output_arbitration_cave="$BUILD_DIR/usb_output_arbitration_cave.template.bin" \
+    "$BUILD_DIR/usb_output_gate.o"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/usb_output_gate_v076.S" \
-    -o "$BUILD_DIR/usb_output_gate_v076.o"
-"$LLVM_BIN/ld.lld" --entry=usb_output_gate_v076 \
-    --section-start=.usb_output_gate_v076_cave=0xc3ae0 \
-    --defsym=SENDKEY_BODY=0x7df98 \
-    --defsym=SENDKEY_ZERO_PATH=0x7e0f0 \
-    "$BUILD_DIR/usb_output_gate_v076.o" \
-    -o "$BUILD_DIR/usb_output_gate_v076.elf"
-"$LLVM_BIN/llvm-objcopy" \
-    --dump-section .usb_output_gate_v076_cave="$BUILD_DIR/usb_output_gate_v076_cave.bin" \
-    "$BUILD_DIR/usb_output_gate_v076.elf"
-
+    "$ROOT_DIR/patches/android-16/native_hifi_route.S" \
+    -o "$BUILD_DIR/a16_native_hifi_route.o"
 "$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/instruction_patches.S" \
-    -o "$BUILD_DIR/instruction_patches.o"
-"$LLVM_BIN/llvm-objcopy" \
-    --dump-section .flinger_sync_patch="$BUILD_DIR/flinger_sync_patch.bin" \
-    --dump-section .usb_441_patch="$BUILD_DIR/usb_441_patch.bin" \
-    --dump-section .usb_3528_patch="$BUILD_DIR/usb_3528_patch.bin" \
-    "$BUILD_DIR/instruction_patches.o"
-
+    "$ROOT_DIR/patches/android-16/hifi_dynamic_default.S" \
+    -o "$BUILD_DIR/a16_hifi_dynamic_default.o"
 "$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/qti_hifi_hal_patches.S" \
-    -o "$BUILD_DIR/qti_hifi_hal_patches.o"
-"$LLVM_BIN/ld.lld" --entry=hifi_usecase_reconfigure_patch \
-    --section-start=.hifi_frame_count_stock=0x279bd8 \
-    --section-start=.hifi_usecase_reconfigure_patch=0x230894 \
-    --defsym=HIFI_USECASE_SKIP_RECONFIGURE=0x2308dc \
-    "$BUILD_DIR/qti_hifi_hal_patches.o" \
-    -o "$BUILD_DIR/qti_hifi_hal_patches.elf"
+    "$ROOT_DIR/patches/android-16/qti_hifi_reconfigure.S" \
+    -o "$BUILD_DIR/a16_qti_hifi_reconfigure.o"
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .hifi_frame_count_stock="$BUILD_DIR/hifi_frame_count_stock.bin" \
-    --dump-section .hifi_usecase_reconfigure_patch="$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" \
-    "$BUILD_DIR/qti_hifi_hal_patches.elf"
+    --dump-section .a16_native_hifi_route="$BUILD_DIR/a16_native_hifi_route.template.bin" \
+    "$BUILD_DIR/a16_native_hifi_route.o"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .a16_hifi_dynamic_default="$BUILD_DIR/a16_hifi_dynamic_default.template.bin" \
+    "$BUILD_DIR/a16_hifi_dynamic_default.o"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .a16_qti_hifi_reconfigure="$BUILD_DIR/a16_qti_hifi_reconfigure.template.bin" \
+    "$BUILD_DIR/a16_qti_hifi_reconfigure.o"
 
-require_size "$BUILD_DIR/select_output_branch.bin" 4
-require_size "$BUILD_DIR/hifi_app_branch.bin" 4
-require_size "$BUILD_DIR/native_hifi_cave.bin" 788
-require_size "$BUILD_DIR/hifi_idle_rate_branch.bin" 4
-require_size "$BUILD_DIR/hifi_idle_rate_cave.bin" 32
-require_size "$BUILD_DIR/latest_max_final_stop_patch.bin" 4
-require_size "$BUILD_DIR/latest_max_idle_rate_patch.bin" 4
-require_size "$BUILD_DIR/hifi_dynamic_default_branch.bin" 4
-require_size "$BUILD_DIR/hifi_dynamic_default_cave.bin" 86
-require_size "$BUILD_DIR/usb_output_gate_branch.bin" 4
-require_size "$BUILD_DIR/usb_output_gate_cave.bin" 140
-require_size "$BUILD_DIR/usb_output_arbitration_cave.bin" 292
-require_size "$BUILD_DIR/usb_output_gate_v076_cave.bin" 140
-require_size "$BUILD_DIR/flinger_sync_patch.bin" 4
-require_size "$BUILD_DIR/usb_441_patch.bin" 4
-require_size "$BUILD_DIR/usb_3528_patch.bin" 4
-require_size "$BUILD_DIR/hifi_frame_count_stock.bin" 24
-require_size "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 16
-require_hex "$BUILD_DIR/select_output_branch.bin" 66b10114
-require_hex "$BUILD_DIR/hifi_app_branch.bin" 38bfff17
-require_hex "$BUILD_DIR/latest_max_final_stop_patch.bin" 86c2ff17
-require_hex "$BUILD_DIR/latest_max_idle_rate_patch.bin" 17c1ff17
-require_hex "$BUILD_DIR/hifi_dynamic_default_branch.bin" c3680114
-require_hex "$BUILD_DIR/usb_output_gate_branch.bin" d3160114
-require_hex "$BUILD_DIR/hifi_idle_rate_branch.bin" 91b9ff17
-require_hex "$BUILD_DIR/flinger_sync_patch.bin" 6a000014
-require_hex "$BUILD_DIR/usb_441_patch.bin" 44ac0000
-require_hex "$BUILD_DIR/usb_3528_patch.bin" 20620500
-require_hex "$BUILD_DIR/hifi_frame_count_stock.bin" 087c409309058052097dc99bff0309ebc101005408c9208b
-require_hex "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 092184522925c81a090200361f2003d5
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/native_hifi_select_hook.elf" \
-    | grep -q 'There are no relocations'
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate.elf" \
-    | grep -q 'There are no relocations'
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate_v076.elf" \
-    | grep -q 'There are no relocations'
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/hifi_dynamic_default.elf" \
-    | grep -q 'There are no relocations'
-"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/qti_hifi_hal_patches.elf" \
-    | grep -q 'There are no relocations'
-grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.bin"
-grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.bin"
-grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.bin"
-"$LLVM_BIN/llvm-nm" -n "$BUILD_DIR/native_hifi_select_hook.elf" \
-    | grep -q '^00000000000c3a8c .* latest_max_idle_rate$'
+require_size "$BUILD_DIR/native_hifi_cave.template.bin" 788
+require_size "$BUILD_DIR/hifi_idle_rate_cave.template.bin" 32
+require_size "$BUILD_DIR/hifi_dynamic_default_cave.template.bin" 86
+require_size "$BUILD_DIR/usb_output_gate_cave.template.bin" 140
+require_size "$BUILD_DIR/usb_output_arbitration_cave.template.bin" 292
+require_size "$BUILD_DIR/a16_native_hifi_route.template.bin" 640
+require_size "$BUILD_DIR/a16_hifi_dynamic_default.template.bin" 86
+require_size "$BUILD_DIR/a16_qti_hifi_reconfigure.template.bin" 16
+grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.template.bin"
+grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.template.bin"
+grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.template.bin"
 python3 "$ROOT_DIR/tests/native_hifi_select_model.py"
 python3 "$ROOT_DIR/tests/usb_output_gate_model.py"
 python3 "$ROOT_DIR/tests/hifi_dynamic_default_model.py"
 python3 "$ROOT_DIR/tests/hifi_idle_rate_model.py"
+bash "$ROOT_DIR/tests/upgrade_state_model.sh"
+
+"${CXX:-c++}" -std=c++17 -O2 -Wall -Wextra -Werror \
+    "$ROOT_DIR/tools/elfpatcher/main.cpp" -o "$BUILD_DIR/elfpatcher-host"
+
+"$LLVM_BIN/clang++" --target=aarch64-linux-android35 -std=c++17 -Os \
+    -fPIE -pie -static-libstdc++ "$ROOT_DIR/tools/elfpatcher/main.cpp" \
+    -o "$BUILD_DIR/elfpatcher"
+"$LLVM_BIN/llvm-strip" --strip-all "$BUILD_DIR/elfpatcher"
+"$LLVM_BIN/llvm-readelf" -h "$BUILD_DIR/elfpatcher" \
+    | grep -q 'Machine:.*AArch64'
+"$LLVM_BIN/llvm-readelf" -d "$BUILD_DIR/elfpatcher" \
+    | grep -q 'Shared library: \[libc.so\]'
+"$BUILD_DIR/elfpatcher-host" info "$BUILD_DIR/elfpatcher" \
+    | grep -q '^machine=aarch64$'
 
 MODULE_STAGE="$BUILD_DIR/module"
-mkdir -p "$MODULE_STAGE/patches" "$ROOT_DIR/dist"
+mkdir -p "$MODULE_STAGE/patches" "$MODULE_STAGE/bin" "$ROOT_DIR/dist"
 cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
-cp "$BUILD_DIR"/*.bin "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR"/*.template.bin "$MODULE_STAGE/patches/"
+cp "$BUILD_DIR/elfpatcher" "$MODULE_STAGE/bin/elfpatcher"
+cp -a "$ROOT_DIR/targets" "$MODULE_STAGE/targets"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
 grep -q '^version=0.7.8-alpha$' "$MODULE_STAGE/module.prop"
-grep -q 'EXPECTED_FINGERPRINT=' "$MODULE_STAGE/customize.sh"
-grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
-grep -q 'Refusing an unsafe binary patch' "$MODULE_STAGE/customize.sh"
+grep -q '^TARGET_INSTALLABLE=0$' \
+    "$MODULE_STAGE/targets/android-16/target.conf"
+grep -q '^TARGET_INSTALLABLE=1$' \
+    "$MODULE_STAGE/targets/android-17/target.conf"
+test -r "$MODULE_STAGE/targets/android-16/baselines/nezha-sm8850-canoe.conf"
+test -r "$MODULE_STAGE/targets/android-17/baselines/nezha-sm8850-canoe.conf"
+grep -q 'patch_source_for' "$MODULE_STAGE/customize.sh"
+grep -q 'Cross-system in-place upgrade is intentionally blocked' \
+    "$MODULE_STAGE/lib/upgrade-state.sh"
+grep -q 'select_audio_target' "$MODULE_STAGE/customize.sh"
+grep -q 'runtime AArch64 relocation' "$MODULE_STAGE/customize.sh"
 grep -q 'KernelSU requires an active metamodule' "$MODULE_STAGE/customize.sh"
 [[ ! -e "$MODULE_STAGE/post-fs-data.sh" ]]
 [[ ! -e "$MODULE_STAGE/service.sh" ]]
 [[ ! -e "$MODULE_STAGE/zygisk" ]]
 sh -n "$MODULE_STAGE/customize.sh"
+sh -n "$MODULE_STAGE/lib/upgrade-state.sh"
+sh -n "$MODULE_STAGE/lib/target-selection.sh"
+sh -n "$MODULE_STAGE/lib/elf-runtime.sh"
+sh -n "$MODULE_STAGE/lib/apply-android-16.sh"
+sh -n "$MODULE_STAGE/lib/apply-android-17.sh"
 
-chmod 0755 "$MODULE_STAGE/customize.sh"
+chmod 0755 "$MODULE_STAGE/customize.sh" "$MODULE_STAGE/bin/elfpatcher"
 chmod 0644 "$MODULE_STAGE/module.prop" "$MODULE_STAGE/README.txt" \
-    "$MODULE_STAGE"/patches/*.bin
+    "$MODULE_STAGE/lib"/*.sh "$MODULE_STAGE"/patches/*.bin \
+    "$MODULE_STAGE/targets"/*.md "$MODULE_STAGE/targets"/*/*.conf \
+    "$MODULE_STAGE/targets"/*/usecases/*.conf \
+    "$MODULE_STAGE/targets"/*/baselines/*.conf
 find "$MODULE_STAGE" -exec touch -t 202601010000 {} +
 
 rm -f "$ROOT_DIR/dist/$OUTPUT_NAME" "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"
@@ -231,3 +162,9 @@ rm -f "$ROOT_DIR/dist/$OUTPUT_NAME" "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"
 )
 unzip -t "$ROOT_DIR/dist/$OUTPUT_NAME"
 cat "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"
+
+if [[ -n ${ANDROID16_AUDIO_ROOT:-} ]]; then
+    bash "$ROOT_DIR/scripts/validate_offline_target.sh" 16 \
+        "$ANDROID16_AUDIO_ROOT" "$ROOT_DIR/dist/$OUTPUT_NAME" \
+        "$BUILD_DIR/elfpatcher-host"
+fi
