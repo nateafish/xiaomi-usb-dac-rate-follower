@@ -105,11 +105,11 @@ bash "$ROOT_DIR/tests/upgrade_state_model.sh"
     -o "$BUILD_DIR/elfpatcher"
 "$LLVM_BIN/llvm-strip" --strip-all "$BUILD_DIR/elfpatcher"
 "$LLVM_BIN/llvm-readelf" -h "$BUILD_DIR/elfpatcher" \
-    | grep -q 'Machine:.*AArch64'
+    | grep 'Machine:.*AArch64' >/dev/null
 "$LLVM_BIN/llvm-readelf" -d "$BUILD_DIR/elfpatcher" \
-    | grep -q 'Shared library: \[libc.so\]'
+    | grep 'Shared library: \[libc.so\]' >/dev/null
 "$BUILD_DIR/elfpatcher-host" info "$BUILD_DIR/elfpatcher" \
-    | grep -q '^machine=aarch64$'
+    | grep '^machine=aarch64$' >/dev/null
 
 MODULE_STAGE="$BUILD_DIR/module"
 mkdir -p "$MODULE_STAGE/patches" "$MODULE_STAGE/bin" "$ROOT_DIR/dist"
