@@ -74,7 +74,10 @@ hifi_idle_rate_hook:
     add     x0, x27, #0x28
     bl      PROFILE_ALL_STOPPED
     cbz     w0, HIFI_IDLE_RATE_STOCK
-    mov     w26, #48000
+    // Rate 1 is an internal final-stop handoff marker, never a HAL rate. The
+    // sender gate converts it to 48 kHz only when another USB output is active;
+    // otherwise it suppresses the hardware update until HIFI standby.
+    mov     w26, #1
     b       HIFI_IDLE_RATE_CONTINUE
 
 .section .native_hifi_cave, "ax"

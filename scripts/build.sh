@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.7.6-alpha
+VERSION=0.7.8-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -100,13 +100,30 @@ require_hex() {
 "$LLVM_BIN/ld.lld" --entry=usb_output_gate \
     --section-start=.usb_output_gate_branch=0x7df94 \
     --section-start=.usb_output_gate_cave=0xc3ae0 \
+    --section-start=.usb_output_arbitration_cave=0xc3bc4 \
     --defsym=SENDKEY_BODY=0x7df98 \
     --defsym=SENDKEY_ZERO_PATH=0x7e0f0 \
+    --defsym=IS_USB_ONLY_OUTPUT=0xc3994 \
+    --defsym=OUTPUT_IS_ACTIVE=0xda260 \
     "$BUILD_DIR/usb_output_gate.o" -o "$BUILD_DIR/usb_output_gate.elf"
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .usb_output_gate_branch="$BUILD_DIR/usb_output_gate_branch.bin" \
     --dump-section .usb_output_gate_cave="$BUILD_DIR/usb_output_gate_cave.bin" \
+    --dump-section .usb_output_arbitration_cave="$BUILD_DIR/usb_output_arbitration_cave.bin" \
     "$BUILD_DIR/usb_output_gate.elf"
+
+"$CLANG" --target=aarch64-linux-android35 -c \
+    "$ROOT_DIR/patches/usb_output_gate_v076.S" \
+    -o "$BUILD_DIR/usb_output_gate_v076.o"
+"$LLVM_BIN/ld.lld" --entry=usb_output_gate_v076 \
+    --section-start=.usb_output_gate_v076_cave=0xc3ae0 \
+    --defsym=SENDKEY_BODY=0x7df98 \
+    --defsym=SENDKEY_ZERO_PATH=0x7e0f0 \
+    "$BUILD_DIR/usb_output_gate_v076.o" \
+    -o "$BUILD_DIR/usb_output_gate_v076.elf"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .usb_output_gate_v076_cave="$BUILD_DIR/usb_output_gate_v076_cave.bin" \
+    "$BUILD_DIR/usb_output_gate_v076.elf"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/instruction_patches.S" \
@@ -142,6 +159,8 @@ require_size "$BUILD_DIR/hifi_dynamic_default_branch.bin" 4
 require_size "$BUILD_DIR/hifi_dynamic_default_cave.bin" 86
 require_size "$BUILD_DIR/usb_output_gate_branch.bin" 4
 require_size "$BUILD_DIR/usb_output_gate_cave.bin" 140
+require_size "$BUILD_DIR/usb_output_arbitration_cave.bin" 292
+require_size "$BUILD_DIR/usb_output_gate_v076_cave.bin" 140
 require_size "$BUILD_DIR/flinger_sync_patch.bin" 4
 require_size "$BUILD_DIR/usb_441_patch.bin" 4
 require_size "$BUILD_DIR/usb_3528_patch.bin" 4
@@ -163,6 +182,8 @@ require_hex "$BUILD_DIR/hifi_usecase_reconfigure_patch.bin" 092184522925c81a0902
     | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate.elf" \
     | grep -q 'There are no relocations'
+"$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/usb_output_gate_v076.elf" \
+    | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/hifi_dynamic_default.elf" \
     | grep -q 'There are no relocations'
 "$LLVM_BIN/llvm-readelf" -r "$BUILD_DIR/qti_hifi_hal_patches.elf" \
@@ -183,7 +204,7 @@ cp -a "$ROOT_DIR/module/." "$MODULE_STAGE/"
 cp "$BUILD_DIR"/*.bin "$MODULE_STAGE/patches/"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.7.6-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.7.8-alpha$' "$MODULE_STAGE/module.prop"
 grep -q 'EXPECTED_FINGERPRINT=' "$MODULE_STAGE/customize.sh"
 grep -q 'require_elf64_aarch64' "$MODULE_STAGE/customize.sh"
 grep -q 'Refusing an unsafe binary patch' "$MODULE_STAGE/customize.sh"

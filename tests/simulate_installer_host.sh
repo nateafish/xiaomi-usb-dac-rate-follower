@@ -56,6 +56,14 @@ run_installer() {
     ' _ "$module_path/customize.host.sh"
 }
 
+restore_v076_idle_gate() {
+    local policy=$1
+    unzip -p "$MODULE_ZIP" patches/usb_output_gate_v076_cave.bin \
+        | dd of="$policy" bs=1 seek=801504 conv=notrunc status=none
+    dd if=/dev/zero of="$policy" bs=1 seek=801732 count=292 \
+        conv=notrunc status=none
+}
+
 FIRST="$TEST_ROOT/first"
 prepare_module "$FIRST" "$POLICY_STOCK" "$FLINGER_STOCK" "$USB_STOCK" "$HAL_STOCK"
 run_installer "$FIRST"
@@ -81,6 +89,7 @@ cmp "$PATCHED_HAL" "$SECOND/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
 V073_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v073.so"
 cp "$PATCHED_POLICY" "$V073_POLICY"
+restore_v076_idle_gate "$V073_POLICY"
 printf '%s' 78ffff17 \
     | xxd -r -p \
     | dd of="$V073_POLICY" bs=1 seek=864416 conv=notrunc status=none
@@ -104,6 +113,7 @@ printf '%s' 087097521f00086b0030881a280380520008c81a09000014 \
     | dd of="$V072_HAL" bs=1 seek=2595800 conv=notrunc status=none
 V072_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v072.so"
 cp "$PATCHED_POLICY" "$V072_POLICY"
+restore_v076_idle_gate "$V072_POLICY"
 printf '%s' 78ffff17 \
     | xxd -r -p \
     | dd of="$V072_POLICY" bs=1 seek=864416 conv=notrunc status=none
@@ -127,6 +137,7 @@ cmp "$PATCHED_HAL" "$UPGRADE/system/vendor/lib64/hw/libaudiocorehal.qti.so"
 
 V074_POLICY="$TEST_ROOT/libaudiopolicymanagerdefault.v074.so"
 cp "$PATCHED_POLICY" "$V074_POLICY"
+restore_v076_idle_gate "$V074_POLICY"
 printf '%s' 78ffff17 \
     | xxd -r -p \
     | dd of="$V074_POLICY" bs=1 seek=864416 conv=notrunc status=none

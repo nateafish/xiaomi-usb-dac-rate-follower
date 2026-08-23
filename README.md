@@ -24,7 +24,8 @@ ELF 架构、关键代码上下文和补丁位置。不匹配时会终止安装�
 - 为 Qualcomm USB 音频路径补充 44.1 kHz 能力
 - 同步 AudioFlinger、AIDL HAL、PAL 和 USB 输出采样率
 - 修正 HIFI 输出的初始 PCM32/48 kHz 配置
-- 最后一个 HIFI 音轨停止后恢复普通 48 kHz 状态
+- 最后一个 HIFI 音轨停止时，空闲 DAC 保持最后采样率直到 standby
+- 普通 USB 输出已活动时，按实际接管状态恢复 48 kHz
 - 无常驻守护进程、轮询、Zygisk 或应用 Hook
 
 ### 限制
@@ -32,6 +33,13 @@ ELF 架构、关键代码上下文和补丁位置。不匹配时会终止安装�
 输出目标：采样率跟随。严格 Bit Perfect 不在本项目保证范围内。
 
 本模块仅适用于上述设备和固件。
+
+### 已验证基线
+
+`v0.7.8-alpha` 已在 iBasso DC-Tonfa 上验证网易云音乐 44.1 kHz
+HIFI 输出：AudioFlinger、PCM32 HAL 和 PAL 均运行于 44.1 kHz。暂停最后一个
+HIFI 音轨后，不会先发送 48 或 384 kHz；线程保持 44.1 kHz 并直接进入
+standby，内部空闲标记不会送入 HAL。
 
 ### 构建
 
@@ -141,7 +149,8 @@ patch locations, and aborts on a mismatch.
 - Adds 44.1 kHz support to the Qualcomm USB audio path
 - Keeps AudioFlinger, the AIDL HAL, PAL and USB output synchronized
 - Starts HIFI playback with a coherent PCM32/48 kHz configuration
-- Restores the normal 48 kHz state after the final HIFI track stops
+- Keeps an idle DAC at the final source rate until HIFI standby
+- Restores 48 kHz when an active ordinary USB output takes ownership
 - No daemon, polling loop, Zygisk code or application hook
 
 ### Limitations
@@ -150,6 +159,13 @@ Output target: sample-rate following. Strict bit-perfect output is outside the
 project's guarantee.
 
 This module is limited to the device and firmware listed above.
+
+### Verified baseline
+
+`v0.7.8-alpha` was verified with NetEase Cloud Music and an iBasso DC-Tonfa
+at 44.1 kHz. AudioFlinger, the PCM32 HAL and PAL all ran at 44.1 kHz. Pausing
+the final HIFI track entered standby at 44.1 kHz without an intermediate 48 or
+384 kHz update, and the internal idle marker did not reach the HAL.
 
 ### Build
 

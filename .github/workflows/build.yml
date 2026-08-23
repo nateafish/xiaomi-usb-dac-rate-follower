@@ -29,13 +29,25 @@ jobs:
         shell: bash
         run: ANDROID_NDK_HOME="$ANDROID_HOME/ndk/29.0.14206865" bash scripts/build.sh
 
+      - name: Resolve module artifact
+        id: module
+        shell: bash
+        run: |
+          version="$(sed -n 's/^version=//p' module/module.prop)"
+          artifact="xiaomi-usb-dac-rate-follower-v${version}"
+          test -n "$version"
+          test -f "dist/${artifact}.zip"
+          test -f "dist/${artifact}.zip.sha256"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+
       - name: Upload module artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xiaomi-usb-dac-rate-follower-v0.7.3-alpha
+          name: ${{ steps.module.outputs.artifact }}
           path: |
-            dist/xiaomi-usb-dac-rate-follower-v0.7.3-alpha.zip
-            dist/xiaomi-usb-dac-rate-follower-v0.7.3-alpha.zip.sha256
+            dist/${{ steps.module.outputs.artifact }}.zip
+            dist/${{ steps.module.outputs.artifact }}.zip.sha256
           if-no-files-found: error
           retention-days: 90
 
@@ -43,11 +55,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          MODULE_VERSION: ${{ steps.module.outputs.version }}
+          MODULE_ARTIFACT: ${{ steps.module.outputs.artifact }}
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "dist/xiaomi-usb-dac-rate-follower-v0.7.3-alpha.zip#Magisk and KernelSU module" \
-            "dist/xiaomi-usb-dac-rate-follower-v0.7.3-alpha.zip.sha256#SHA-256 checksum" \
-            --title "Xiaomi USB DAC Rate Follower v0.7.3 Alpha" \
+            "dist/${MODULE_ARTIFACT}.zip#Magisk and KernelSU module" \
+            "dist/${MODULE_ARTIFACT}.zip.sha256#SHA-256 checksum" \
+            --title "Xiaomi USB DAC Rate Follower v${MODULE_VERSION}" \
             --prerelease \
-            --notes "Exact-firmware experimental build for Xiaomi 17 Ultra OS4.0.0.15.XPACNXM. Apple Music and NetEase are routed to Xiaomi's native USB-only hifi_playback path. The dynamic HIFI profile now opens coherently at PCM32/48 kHz, so MixerThread, the AIDL FMQ and PAL start from one rate and QTI's stock 40 ms calculation creates a 1920-frame queue. Later native rate events synchronize AudioFlinger and PAL across 44.1/48/96 kHz and above. The installer also restores the unsafe v0.7.2 HAL frame-count modification if encountered. No BIT_PERFECT claim, daemon, Zygisk, polling, Preferred Mixer, Deep Buffer patch, or live audio restart. KernelSU requires a metamodule. Hardware transition testing is still required."
+            --generate-notes

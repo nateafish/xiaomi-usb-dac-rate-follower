@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply v0.7.6 blobs to private stock captures and verify exact regions."""
+"""Apply v0.7.8 blobs to private stock captures and verify exact regions."""
 
 import sys
 import zipfile
@@ -9,6 +9,7 @@ from pathlib import Path
 POLICY_PATCHES = {
     "native_hifi_cave.bin": 800_684,
     "usb_output_gate_cave.bin": 801_504,
+    "usb_output_arbitration_cave.bin": 801_732,
     "select_output_branch.bin": 356_884,
     "hifi_app_branch.bin": 867_276,
     "usb_output_gate_branch.bin": 515_988,
@@ -60,6 +61,7 @@ def main() -> None:
     require(policy, 865_840, "a80100b4", "stock idle-rate branch")
     require(policy, 432_224, "e0e340fd", "stock dynamic-profile continuation")
     assert not any(policy[800_684:801_730]), "reserved policy cave is occupied"
+    assert not any(policy[801_732:802_024]), "USB arbitration cave is occupied"
     require(flinger, 1_772_164, "480d0054", "stock Mixer sync branch")
     require(usb, 29_024, "20620500", "stock USB 352.8 slot")
     require(usb, 29_052, "44ac0000", "stock USB 44.1 slot")
@@ -78,6 +80,8 @@ def main() -> None:
     with zipfile.ZipFile(archive_path) as archive:
         assert len(archive.read("patches/native_hifi_cave.bin")) == 788
         assert len(archive.read("patches/usb_output_gate_cave.bin")) == 140
+        assert len(archive.read("patches/usb_output_arbitration_cave.bin")) == 292
+        assert len(archive.read("patches/usb_output_gate_v076_cave.bin")) == 140
         assert len(archive.read("patches/hifi_dynamic_default_cave.bin")) == 86
         assert len(archive.read("patches/hifi_idle_rate_cave.bin")) == 32
         patched_policy = apply(policy, POLICY_PATCHES, archive)
@@ -92,6 +96,8 @@ def main() -> None:
         require(patched_policy, 356_884, "66b10114", "patched select hook")
         require(patched_policy, 867_276, "38bfff17", "patched app hook")
         require(patched_policy, 515_988, "d3160114", "patched sender hook")
+        require(patched_policy, 801_504, "39000014", "patched sender trampoline")
+        require(patched_policy, 801_732, "fd7bbba9", "patched idle arbitration")
         require(patched_policy, 864_416, "86c2ff17", "patched final-stop idle branch")
         require(patched_policy, 865_840, "17c1ff17", "patched idle-rate branch")
         require(patched_policy, 873_596, "91b9ff17", "patched HIFI idle-rate caller")
@@ -120,7 +126,7 @@ def main() -> None:
         assert apply(patched_usb, USB_PATCHES, archive) == patched_usb
         assert apply(patched_hal, HAL_PATCHES, archive) == patched_hal
 
-    print("firmware patch verification: stock -> v0.7.6 passed")
+    print("firmware patch verification: stock -> v0.7.8 passed")
 
 
 if __name__ == "__main__":
