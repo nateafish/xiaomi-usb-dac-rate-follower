@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.7.8-alpha
+Xiaomi USB DAC Rate Follower v0.7.9-alpha
 
 Experimental module verified on Xiaomi 17 Ultra Android 17 firmware
 OS4.0.0.15.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
@@ -27,13 +27,14 @@ aborts on unsupported or mixed patch states.
 
 Patch locations, imported calls and AArch64 branch targets are resolved from
 the installed ELF at runtime. Recorded research offsets are not write gates.
-The bundled Android 16 use cases are offline-validated but installation is
-blocked until hardware testing is complete.
+The bundled Android 16 use cases are offline-validated and installable after
+the user acknowledges the missing hardware validation with a volume key.
 
-After a system-partition OTA, uninstall the old module, reboot into the stock
-system, then reinstall. A cross-system in-place update is left untouched and
-aborted. Same-system updates use Magisk's stock mirror or the active KernelSU
-module payload; full stock libraries are not stored in this module.
+An OTA within the same Android major version keeps the module enabled. The
+next module installation warns about the firmware change and repeats all
+structural checks. Cross-version or cross-target upgrades abort. Updates use
+Magisk's stock mirror or the active KernelSU module payload; full stock
+libraries are not stored in this module.
 
 Output target: sample-rate following. Strict Bit Perfect is outside the
 project's guarantee.

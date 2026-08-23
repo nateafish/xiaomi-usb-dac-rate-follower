@@ -34,9 +34,9 @@ the sole installation decision.
 
 The module ZIP carries one runtime patch driver per Android major version.
 Android 17 is installable after all target and semantic checks pass. Android
-16 is currently `offline-validated`: its route, dynamic-default, MixerThread,
-USB table and Qualcomm HAL use cases can be applied and checked against an
-extracted OTA, but the installer deliberately aborts before touching a device.
+16 is `theoretical-preview`: its route, dynamic-default, MixerThread, USB table
+and Qualcomm HAL use cases passed offline OTA validation. The installer warns
+about missing hardware validation and waits for a volume key before applying.
 
 For offline validation, build a host copy of `tools/elfpatcher`, build the
 module ZIP, then run:

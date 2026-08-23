@@ -77,7 +77,10 @@ require_binary_string "$POLICY_SOURCE" HifiSampleRateManager: AudioPolicyManager
 require_binary_string "$POLICY_SOURCE" hifi_playback AudioPolicyManager
 require_binary_string "$IMPL_SOURCE" AudioPolicyManagerImpl Xiaomi-AudioPolicyImpl
 require_binary_string "$USB_SOURCE" readSupportedSampleRate Qualcomm-USB
-require_binary_string "$HAL_SOURCE" HifiPlayback Qualcomm-Audio-HAL
+if ! grep -a -q HifiPlayback "$HAL_SOURCE" 2>/dev/null; then
+    require_binary_string "$HAL_SOURCE" DeepBufferPlayback Qualcomm-Audio-HAL
+    require_binary_string "$HAL_SOURCE" MiStreamOutPrimary Qualcomm-Audio-HAL
+fi
 
 mkdir -p "${POLICY_DEST%/*}" "${FLINGER_DEST%/*}" \
     "${USB_DEST%/*}" "${HAL_DEST%/*}" \

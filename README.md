@@ -11,14 +11,15 @@
 
 | 机型 | 代号 | 系统 / 固件基线 | 验证状态 | 模块状态 | 适配类型 |
 | --- | --- | --- | --- | --- | --- |
-| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **实机验证** | 可安装 | 原生 HIFI 管理器修复 + Nezha AIDL HAL |
-| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 暂不开放安装 | Nezha 原生 `HifiPlayback` / usecase guard |
-| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 暂不开放安装 | Pudding 指针布局 `sampling_rate` handler |
-| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 暂不开放安装 | Nezha 系统 policy + Pudding 类 HAL handler |
+| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **实机验证** | 可安装 | 原生 HIFI 修复 |
+| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | 原生 HIFI 移植 |
+| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
 
 “实机验证”表示已在设备、USB DAC 和实际播放器上测试；“理论适配”表示已从
 完整 OTA 提取目标库，并通过语义注入、分支重定位和两次应用幂等验证，但没有
 对应实机。理论适配不等于已经确认音频稳定性或严格 Bit Perfect。
+安装理论适配目标时，安装器会显示醒目警告；按任一音量键确认后才会继续。
 
 当前实机验证播放器为 Apple Music、网易云音乐，输出为 USB Audio。Root 支持
 Magisk，或带有效 metamodule 的 KernelSU。
@@ -41,10 +42,10 @@ AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一�
 
 输出目标：采样率跟随。严格 Bit Perfect 不在本项目保证范围内。
 
-系统分区升级后不要直接覆盖安装模块。安装器检测到 system、vendor、odm 或
-product 版本变化时会保持旧模块不动并中止；请卸载模块、重启到原始系统后再安装。
-同一系统上的模块升级会优先使用 Magisk 分区镜像，KernelSU 则使用当前模块
-payload 作为已验证的升级基线，不会在模块中保存整套 stock SO。
+同一 Android 大版本内升级 system、vendor、odm 或 product 后，模块保持启用。
+下次覆盖安装时，安装器会提示固件发生变化并重新执行全部结构检查。跨 Android
+大版本或设备/HAL 目标发生变化时会中止安装。模块升级优先使用 Magisk 分区镜像；
+KernelSU 使用当前模块 payload 作为升级基线，不在模块中保存整套 stock SO。
 
 ### 已验证基线
 
@@ -63,27 +64,15 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 
 ### 目标与智能匹配
 
-仓库以 Android 大版本组织目标：`targets/android-16` 和
-`targets/android-17`。每个版本下的 `baselines/` 保存完整的设备、SoC、board
-platform、AIDL/HIDL 世代和接口版本组合，`usecases/` 保存可复用的修改方案；
-每条实际修改则由函数局部签名、动态符号、
-PLT、对象布局和可执行空洞共同确认。安装时会重新计算文件位置并重定位 AArch64
-分支，不把研究时记录的文件偏移当作写入地址。
+仓库按 Android 大版本组织目标。`baselines/` 记录设备、SoC、board platform、
+AIDL/HIDL 世代和接口版本，`usecases/` 保存对应的修改方案。安装器先选择候选方案，
+再用函数局部签名、动态符号、PLT、对象布局和可执行空洞逐项确认。文件位置和
+AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写入地址。
 
-未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示醒目警告，然后继续
-执行全部结构检查；零命中、多命中、未知布局或混合补丁状态都会中止。Android 16
-方案已经通过 OTA 提取库的离线注入和幂等验证，但尚未实机验证，因此当前安装器
-仍会主动阻止 Android 16 安装。Xiaomi 17（`pudding`）Android 16 也已完成
-离线移植：它缺少的 `HifiPlayback` 只是静态帧数 helper，而无 flag 的
-`hifi_playback` 已由 QTI 原生映射到等价的 Deep Buffer usecase 3。模块不复制
-Nezha 类或虚表，而是在 Pudding 自己的 `MiStreamOutPrimary` 中恢复被裁掉的
-`sampling_rate` 更新、PAL standby 和下次写入重开流程。该目标仍需实机验证，
-所以保持为不可安装基线。
-
-Xiaomi 17 Pro Max（`popsicle`）Android 16 是混合基线：系统 policy 与 Nezha
-相同，Qualcomm USB 服务与 Pudding 相同，核心 HAL 虽然是独立构建，但完整匹配
-Pudding 的指针对象布局和 rate handler 语义。它已通过两次离线应用幂等验证，
-同样因为没有实机而保持不可安装。
+未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示警告，然后执行相同的
+结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。三个 Android 16
+基线已通过 OTA 库的离线注入和两次应用幂等验证，现允许在确认“尚未实机验证”
+警告后安装；该提示不代表稳定性或严格 Bit Perfect 已经得到验证。
 
 ### 适配其他设备
 
@@ -171,16 +160,18 @@ can follow tracks between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 
 | Model | Codename | OS / firmware baseline | Validation | Module status | Adaptation type |
 | --- | --- | --- | --- | --- | --- |
-| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **Hardware verified** | Installable | Native HIFI manager fixes + Nezha AIDL HAL |
-| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)** | Installation disabled | Native Nezha `HifiPlayback` / usecase guard |
-| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)** | Installation disabled | Pudding pointer-layout `sampling_rate` handler |
-| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)** | Installation disabled | Nezha system policy + Pudding-family HAL handler |
+| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **Hardware verified** | Installable | Native HIFI fix |
+| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)** | Installable with warning | Native HIFI port |
+| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL HAL port |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL HAL port |
 
 “Hardware verified” means testing on the device with a USB DAC and real
 players. “Theoretical” means the complete OTA was extracted and passed
 semantic injection, branch relocation and two-pass idempotence checks without
 corresponding hardware. It does not confirm runtime stability or strict
 bit-perfect output.
+For a theoretical target, the installer shows a prominent warning and waits
+for either volume key before continuing.
 
 Hardware testing currently covers Apple Music and NetEase Cloud Music over
 USB Audio. Root support is Magisk or KernelSU with an active metamodule.
@@ -206,12 +197,12 @@ hashes are diagnostic only.
 Output target: sample-rate following. Strict bit-perfect output is outside the
 project's guarantee.
 
-Do not install an update over a module that survived a system-partition OTA.
-If the system, vendor, ODM or product version changed, the installer leaves the
-old module untouched and aborts; uninstall it, reboot into the unmodified
-system, then reinstall. Same-system module updates use Magisk's partition
-mirror when available, or the active KernelSU module payload as a validated
-upgrade base. Full stock libraries are not duplicated inside the module.
+A system, vendor, ODM or product update within the same Android major version
+does not disable the module. The next in-place module installation warns that
+the firmware changed and repeats every structural check. A different Android
+major version or device/HAL target is blocked. Module updates prefer Magisk's
+partition mirror; KernelSU uses the active module payload as its upgrade base.
+Full stock libraries are not duplicated inside the module.
 
 ### Verified baseline
 
@@ -230,34 +221,20 @@ Build artifacts are written to `dist/`.
 
 ### Targets and semantic matching
 
-Targets are grouped by Android major version under `targets/android-16` and
-`targets/android-17`. Each version keeps exact device / SoC / board / HAL
-tuples in `baselines/` and reusable patch plans in `usecases/`. Device,
-SoC, board platform, AIDL/HIDL generation and interface version select a
-candidate baseline. Each write is then authorized
-by function-local signatures, dynamic symbols, PLT entries, independently
-verified object layouts and executable cave checks from the matching
-`usecases/` directory. Runtime AArch64 branches are relocated against the
-actual ELF; research offsets are never used as write addresses.
+Targets are grouped by Android major version. `baselines/` records the device,
+SoC, board platform, AIDL/HIDL generation and interface version, while
+`usecases/` contains the corresponding patch plans. After selecting a
+candidate, every write is checked against function-local signatures, dynamic
+symbols, PLT entries, object layouts and executable caves. File locations and
+AArch64 branches are resolved during installation; research offsets are never
+used as write addresses.
 
-An unrecorded Qualcomm device receives a prominent warning and may continue
-only when every structural check passes. Zero or multiple signature matches,
-unknown layouts and mixed patch states abort. The Android 16 target passes
-offline injection and idempotence tests against the extracted OTA libraries,
-but remains blocked from device installation until it is tested on hardware.
-The Xiaomi 17 (`pudding`) Android 16 baseline has reusable policy, MixerThread
-and USB structures. Its missing `HifiPlayback` symbol is only a static frame
-count helper; QTI already maps the flagless `hifi_playback` profile to the
-equivalent Deep Buffer usecase 3. The port therefore restores the compiled-out
-`sampling_rate` update and native standby/reopen path inside Pudding's own
-`MiStreamOutPrimary` instead of copying Nezha classes or vtables. It remains
-non-installable until hardware validation is complete.
-
-The Xiaomi 17 Pro Max (`popsicle`) Android 16 OTA is a hybrid baseline: its
-system policy matches Nezha, its Qualcomm USB service matches Pudding, and its
-separately built core HAL matches every Pudding pointer-layout and rate-handler
-semantic check. It passes two-pass offline validation and remains
-non-installable because no hardware is available.
+An unrecorded Qualcomm device receives a prominent warning before the same
+structural checks run. Zero or multiple matches, unknown layouts and mixed
+patch states abort. All three Android 16 baselines passed offline injection and
+two-pass idempotence checks against extracted OTA libraries. Installation is
+now allowed after acknowledging that hardware validation is still missing;
+this does not certify runtime stability or strict bit-perfect output.
 
 ### Porting requests
 

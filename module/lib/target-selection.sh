@@ -42,6 +42,23 @@ detect_audio_core_aidl_major() {
     done | sort -n | tail -n 1
 }
 
+confirm_theoretical_installation() {
+    ui_print "! WARNING: this target has not been tested on hardware"
+    ui_print "! OTA extraction, semantic patching and idempotence were verified"
+    ui_print "! Audio stability and strict bit-perfect output are not confirmed"
+    command -v getevent >/dev/null 2>&1 \
+        || abort "! Cannot read a hardware key for confirmation"
+    ui_print "- Press either volume key to acknowledge and continue"
+    while true; do
+        confirmation_event=$(getevent -qlc 1 2>/dev/null) \
+            || abort "! Failed to read the confirmation key"
+        case "$confirmation_event" in
+            *KEY_VOLUMEUP*|*KEY_VOLUMEDOWN*) break ;;
+        esac
+    done
+    ui_print "- Theoretical-target warning acknowledged"
+}
+
 select_audio_target() {
     compatibility_file=$MODPATH/targets/common/compatibility.conf
     [ -r "$compatibility_file" ] \
@@ -128,6 +145,10 @@ select_audio_target() {
         ui_print "! Target status: ${TARGET_STATUS:-unknown}"
         ui_print "! Its use cases are retained for offline porting, not device installation"
         abort "! $TARGET_ID is not enabled for installation yet"
+    fi
+    validation_type=${BASELINE_VALIDATION_TYPE:-${TARGET_VALIDATION_TYPE:-}}
+    if [ "$validation_type" = theoretical ]; then
+        confirm_theoretical_installation
     fi
     ui_print "- Selected target: $TARGET_ID (${TARGET_STATUS:-unknown})"
 }

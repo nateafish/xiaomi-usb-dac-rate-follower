@@ -65,6 +65,7 @@ default, MixerThread synchronization, Qualcomm USB 44.1 kHz table fix and
 Pudding-family HAL rate handler to copied Popsicle OTA files. A second complete
 application was byte-identical to the first.
 
-`popsicle-sm8850-canoe-aidl-v3` is recorded as theoretical/offline-validated
-and remains non-installable until hardware testing. No firmware image or
+`popsicle-sm8850-canoe-aidl-v3` is recorded as theoretically validated from
+the offline OTA. Installation is allowed after a warning and volume-key
+confirmation that hardware validation is still missing. No firmware image or
 extracted binary is stored in Git.

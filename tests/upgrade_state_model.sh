@@ -49,6 +49,17 @@ rm -f "$TEST_DIR/changed.conf.bak"
 if same_system_identity "$TEST_DIR/old.conf" "$TEST_DIR/changed.conf"; then
     fail "a vendor partition update must not be treated as the same system"
 fi
+same_android_target_identity "$TEST_DIR/old.conf" "$TEST_DIR/changed.conf" \
+    || fail "a same-major vendor update must remain an eligible target"
+
+cp "$TEST_DIR/changed.conf" "$TEST_DIR/cross-major.conf"
+sed -i.bak -e 's/^sdk=37$/sdk=36/' -e 's/^release=17$/release=16/' \
+    "$TEST_DIR/cross-major.conf"
+rm -f "$TEST_DIR/cross-major.conf.bak"
+if same_android_target_identity "$TEST_DIR/old.conf" \
+        "$TEST_DIR/cross-major.conf"; then
+    fail "an Android major-version change must be blocked"
+fi
 
 RATE_FOLLOWER_ACTIVE_DIR=$TEST_DIR/modules/$RATE_FOLLOWER_MODULE_ID
 RATE_FOLLOWER_ACTIVE_IMAGE_DIR=$TEST_DIR/image/$RATE_FOLLOWER_MODULE_ID

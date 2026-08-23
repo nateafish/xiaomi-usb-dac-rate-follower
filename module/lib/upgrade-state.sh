@@ -4,6 +4,7 @@ RATE_FOLLOWER_MODULE_ID=xiaomi-usb-dac-rate-follower
 RATE_FOLLOWER_ACTIVE_DIR=/data/adb/modules/$RATE_FOLLOWER_MODULE_ID
 RATE_FOLLOWER_ACTIVE_IMAGE_DIR=/data/adb/metamodule/mnt/$RATE_FOLLOWER_MODULE_ID
 RATE_FOLLOWER_IS_UPGRADE=0
+RATE_FOLLOWER_FIRMWARE_CHANGED=0
 RATE_FOLLOWER_MAGISK_MIRROR=
 
 list_vintf_device_manifests() {
@@ -83,6 +84,31 @@ same_system_identity() {
     return 1
 }
 
+same_android_target_identity() {
+    previous=$1
+    current=$2
+    old_release=$(identity_value "$previous" release)
+    new_release=$(identity_value "$current" release)
+    old_major=${old_release%%.*}
+    new_major=${new_release%%.*}
+    [ -n "$old_major" ] && [ "$old_major" = "$new_major" ] || {
+        ui_print "! Android major version changed: ${old_major:-unknown} -> ${new_major:-unknown}"
+        return 1
+    }
+    changed=
+    for identity_key in sdk device odm_device board_platform soc_manufacturer \
+            soc_model boot_hardware hal_generation; do
+        old_value=$(identity_value "$previous" "$identity_key")
+        new_value=$(identity_value "$current" "$identity_key")
+        if [ "$old_value" != "$new_value" ]; then
+            changed="$changed $identity_key"
+        fi
+    done
+    [ -z "$changed" ] && return 0
+    ui_print "! Changed target identity fields:$changed"
+    return 1
+}
+
 find_magisk_mirror() {
     command -v magisk >/dev/null 2>&1 || return 1
     magisk_tmp=$(magisk --path 2>/dev/null)
@@ -115,18 +141,22 @@ prepare_upgrade_state() {
         abort "! Refusing an unverifiable in-place upgrade"
     fi
 
-    if ! same_system_identity "$old_identity" "$current_identity"; then
-        ui_print "! Android or a system partition changed while the module remained installed"
+    if ! same_android_target_identity "$old_identity" "$current_identity"; then
         ui_print "! The existing module has not been disabled or overwritten"
-        ui_print "! Uninstall it, reboot into the unmodified system, then reinstall"
-        abort "! Cross-system in-place upgrade is intentionally blocked"
+        abort "! Cross-version or cross-target in-place upgrade is blocked"
+    fi
+
+    if ! same_system_identity "$old_identity" "$current_identity"; then
+        RATE_FOLLOWER_FIRMWARE_CHANGED=1
+        ui_print "! WARNING: system partitions changed within the same Android version"
+        ui_print "! The module remains enabled; all ELF checks will run again"
     fi
 
     RATE_FOLLOWER_IS_UPGRADE=1
     if [ -n "$RATE_FOLLOWER_MAGISK_MIRROR" ]; then
-        ui_print "- Same-system upgrade: using Magisk's stock partition mirror"
+        ui_print "- Upgrade source: Magisk stock partition mirror"
     else
-        ui_print "- Same-system upgrade: using the active module payload as the patch base"
+        ui_print "- Upgrade source: active module payload"
     fi
 }
 

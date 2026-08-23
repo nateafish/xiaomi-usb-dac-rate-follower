@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.7.8-alpha
+VERSION=0.7.9-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -103,6 +103,7 @@ python3 "$ROOT_DIR/tests/usb_output_gate_model.py"
 python3 "$ROOT_DIR/tests/hifi_dynamic_default_model.py"
 python3 "$ROOT_DIR/tests/hifi_idle_rate_model.py"
 bash "$ROOT_DIR/tests/upgrade_state_model.sh"
+bash "$ROOT_DIR/tests/theoretical_confirmation_model.sh"
 
 "${CXX:-c++}" -std=c++17 -O2 -Wall -Wextra -Werror \
     "$ROOT_DIR/tools/elfpatcher/main.cpp" -o "$BUILD_DIR/elfpatcher-host"
@@ -126,16 +127,20 @@ cp "$BUILD_DIR/elfpatcher" "$MODULE_STAGE/bin/elfpatcher"
 cp -a "$ROOT_DIR/targets" "$MODULE_STAGE/targets"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.7.8-alpha$' "$MODULE_STAGE/module.prop"
-grep -q '^TARGET_INSTALLABLE=0$' \
+grep -q '^version=0.7.9-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^TARGET_INSTALLABLE=1$' \
+    "$MODULE_STAGE/targets/android-16/target.conf"
+grep -q '^TARGET_VALIDATION_TYPE=theoretical$' \
     "$MODULE_STAGE/targets/android-16/target.conf"
 grep -q '^TARGET_INSTALLABLE=1$' \
     "$MODULE_STAGE/targets/android-17/target.conf"
 test -r "$MODULE_STAGE/targets/android-16/baselines/nezha-sm8850-canoe.conf"
 test -r "$MODULE_STAGE/targets/android-17/baselines/nezha-sm8850-canoe.conf"
 grep -q 'patch_source_for' "$MODULE_STAGE/customize.sh"
-grep -q 'Cross-system in-place upgrade is intentionally blocked' \
+grep -q 'Cross-version or cross-target in-place upgrade is blocked' \
     "$MODULE_STAGE/lib/upgrade-state.sh"
+grep -q 'confirm_theoretical_installation' \
+    "$MODULE_STAGE/lib/target-selection.sh"
 grep -q 'select_audio_target' "$MODULE_STAGE/customize.sh"
 grep -q 'runtime AArch64 relocation' "$MODULE_STAGE/customize.sh"
 grep -q 'KernelSU requires an active metamodule' "$MODULE_STAGE/customize.sh"
