@@ -43,20 +43,78 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 
 ### 适配其他设备
 
-请在 Issue 中提供以下信息：
+请不要直接安装现有 ZIP。先在设备连接并获得 root 后，在仓库根目录运行：
 
-- 设备、系统、完整指纹、SDK、平台和 Root 方案
+```sh
+bash scripts/collect_device_port.sh
+```
+
+脚本只读采集并生成 `xiaomi-usb-dac-port-*.tar.gz`。检查并删除个人信息
+后，将压缩包附在 Issue 中。也可以手工提供以下内容。
+
+#### 必需的系统信息
+
+- 设备型号、`ro.product.device`、Android 版本、SDK、SoC/平台和完整
+  `ro.build.fingerprint`
+- Magisk 或 KernelSU 版本；KernelSU 还要说明 metamodule/overlay 方案
+- 已安装的音频相关模块、音效、厂商增强功能，以及是否启用 Dolby、DTS
+  或其他处理链
+- DAC 型号、USB 连接方式、DAC 数显结果和实际测试音轨的 PCM 格式
+
+#### 必需的 ELF 文件
+
+这些是当前模块直接分析或改写的核心对象，必须从目标设备原路径导出，
+保持原始文件名和完整文件内容：
+
 - `libaudiopolicymanagerdefault.so`
 - `libaudiopolicycomponents.so`
 - `libaudioflinger.so`
-- `libaudiopolicymanagerimpl.so` 及相关 stub 库
-- Qualcomm USB 音频库和 AIDL HAL
-- 音频 policy、VINTF manifest 和 init RC
-- USB DAC 连接并播放时的 AudioPolicy、AudioFlinger、ALSA 和 USB 状态
-- 44.1、48、96 kHz 切换及停止、重连过程的日志
-- DAC 型号和数显采样率
+- `libaudiopolicymanagerimpl.so` 及同目录的 stub/接口库
+- `libaudioclient.so`、`libaudiopolicyservice.so`（如果存在）
+- `libdev_usb.so`
+- `libaudioplatformconverter.qti.so`（如果存在）
+- 当前 Qualcomm Audio HAL：`libaudiocorehal.qti.so`、`libaudiocorehal.default.so`
+  或同类 `audio.*` / `android.hardware.audio*` 库
+- 实际注册音频服务的可执行文件，例如 `audiohalservice.qti`，以及
+  `audioserver` 的 `/proc/<pid>/maps` 中出现的音频相关库
 
-上传前请删除个人信息。每个设备和固件都需要单独适配。
+#### HIDL 对照所需文件
+
+如果设备仍提供 HIDL，除了上面的通用对象，还要提供实际存在的全部相关
+文件，而不是只给文件名：
+
+- `vendor/lib64/hw/audio.primary*.so`
+- `vendor/lib64/hw/audio.usb*.so`、`audio.bluetooth*.so`
+- `vendor/lib64/hw/android.hardware.audio@*.so`、
+  `android.hardware.audio.effect@*.so`
+- `vendor/bin/hw/android.hardware.audio@*.service` 或同类 audio HAL 服务
+- 同一服务进程的 `/proc/<pid>/maps`，以及依赖的 Qualcomm `libpal`、`libagm`、
+  `libacdb`、`libqahw`、tinyalsa、平台 converter 和 USB 库
+- HIDL 版本的 VINTF manifest、init RC 和 audio HAL 配置
+
+旧设备还要保留实际服务使用的 ABI：如果 HAL 进程加载 `/vendor/lib/`，请同时
+提供 32 位库；不能只导出同名的 `/vendor/lib64/` 文件。
+
+#### 配置和运行状态
+
+- 当前生效的 audio policy/module XML、audio policy engine XML、厂商 audio
+  interface XML，以及相关 SKU/ODM 覆盖文件
+- audio HAL 的 VINTF manifest 和 init RC
+- `dumpsys media.audio_policy`
+- `dumpsys media.audio_flinger`
+- `/proc/asound/cards`、`/proc/asound/pcm`、相关 `card*/stream*`，以及 USB
+  描述符或 `dumpsys usb`
+- `service list`、音频服务进程列表和 audio 服务的 SELinux 上下文
+
+#### 必需的动态日志
+
+请清理日志后，在 DAC 已连接时依次测试 44.1、48、96、44.1 kHz，完全停止
+播放，再拔插 DAC。日志要覆盖每个切换前后至少数秒，并同时记录 DAC 数显。
+至少包含 `AudioPolicy`、`AudioFlinger`、AIDL/HIDL HAL、PAL/AGM、ALSA、USB
+和采样率关键字。不要上传 APK、歌曲文件或与音频问题无关的完整 logcat。
+
+各设备和各固件需要单独核对 ELF 架构、代码上下文、版本和补丁位置。只有
+拿到对应的 stock 库，才能判断旧 HIDL 路径是否存在可迁移的实现。
 
 ## English
 
@@ -103,9 +161,25 @@ Build artifacts are written to `dist/`.
 
 ### Porting requests
 
-Open an Issue with the device and firmware details, complete build fingerprint,
-Root setup, policy and audio libraries, Qualcomm USB and AIDL HAL libraries,
-active audio configuration files, AudioPolicy and AudioFlinger dumps, ALSA and
-USB state, transition logs for 44.1/48/96 kHz and stop/reconnect events, and the
-DAC model. Remove personal information before uploading. Each device and
-firmware requires separate adaptation.
+Do not install an existing ZIP on an unlisted device. With adb and root
+available, run `bash scripts/collect_device_port.sh` from the repository root.
+It creates a read-only `xiaomi-usb-dac-port-*.tar.gz` containing device
+metadata, relevant ELF files, AIDL/HIDL discovery data, active configuration,
+audio state, ALSA/USB state, and filtered recent logcat. Review and remove
+personal information before attaching it to an Issue.
+
+The archive must include the stock versions of the libraries at their original
+paths. The current patch targets are `libaudiopolicymanagerdefault.so`,
+`libaudioflinger.so`, `libdev_usb.so`, and the Qualcomm Audio HAL. The policy
+components and Xiaomi policy implementation libraries are required for layout
+analysis even though this module does not overwrite them. For a HIDL device,
+also include every existing `audio.primary*.so`, `audio.usb*.so`,
+`audio.bluetooth*.so`, `android.hardware.audio@*.so`, matching HAL service
+binaries, and the audio-related libraries shown in the service process maps.
+
+Include active audio policy/module XML, policy-engine XML, VINTF manifests,
+audio init RC files, AudioPolicy and AudioFlinger dumps, ALSA and USB state,
+and logs covering 44.1 -> 48 -> 96 -> 44.1 kHz, stop, and DAC reconnect. State
+the DAC model, displayed rate, PCM format, effects/Dolby status, and observed
+result. Do not upload APKs, music, or unrelated full logcat. Every device and
+firmware needs a separate signature and offset review.

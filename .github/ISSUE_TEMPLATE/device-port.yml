@@ -34,7 +34,34 @@ body:
     attributes:
       label: Diagnostic archive link
       description: |
-        Attach or link an archive containing the files listed in README: the three primary libraries, available QTI AIDL HAL files, audio policy/XML/VINTF/init files, properties, dumpsys output, ALSA USB descriptors, and a 44.1 -> 48 kHz playback logcat.
+        Run scripts/collect_device_port.sh with adb + root, review the output,
+        remove personal information, and attach the resulting archive. It
+        should contain the stock ELF files at their original paths, active
+        policy/XML/VINTF/init files, AIDL/HIDL discovery, service process maps,
+        AudioPolicy/AudioFlinger/ALSA/USB state, and filtered logs. For HIDL,
+        include every existing audio.primary*.so, audio.usb*.so,
+        audio.bluetooth*.so, android.hardware.audio@*.so, matching service
+        binaries, and the mapped PAL/AGM/ACDB dependencies.
+    validations:
+      required: true
+  - type: textarea
+    id: stack
+    attributes:
+      label: Audio stack classification
+      description: |-
+        State whether the device uses AIDL, HIDL, or both. List the detected
+        HAL service name, audio HAL library, USB library, and any audio-related
+        libraries shown in audioserver/audio HAL process maps.
+    validations:
+      required: true
+  - type: textarea
+    id: transitions
+    attributes:
+      label: Transition test results
+      description: |-
+        With one USB DAC connected, report the DAC display and app result for
+        44.1 -> 48 -> 96 -> 44.1 kHz, PCM16/24/32 or Float if tested, stop,
+        and reconnect. Include whether another app or Bluetooth was active.
     validations:
       required: true
   - type: checkboxes
