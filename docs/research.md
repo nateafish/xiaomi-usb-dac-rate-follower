@@ -272,6 +272,22 @@ the Android 16 pointer-layout `sampling_rate` handler combined with the common
 semantic policy/MixerThread/USB patches. Two-pass offline application is byte-idempotent;
 hardware behavior remains unverified.
 
+### Byron variant
+
+Xiaomi 17 Max (`byron`) Android 16 is another independently recorded hybrid.
+Its policy manager, policy components, Xiaomi policy implementation and
+AudioFlinger match the common Android 16 semantic path; its Qualcomm USB
+library uses the shared `libdev_usb.so` table. Its core HAL has the distinct
+Build ID `8e108e51c3e4ce824f17b99e46fc65af`.
+
+The new HAL nevertheless resolves every shared pointer-layout anchor and the
+same owned executable gap. Its concrete standby wrapper and complete base
+shutdown chain were inspected and do not reacquire the configure mutex. The
+full patch set is twice-application idempotent, and a deliberately mixed HAL
+hook fails closed. Byron therefore uses the Android 16 pointer-layout handler
+under its own exact device baseline; it is not selected through a broad model
+family label.
+
 ## Idle 384 kHz retention
 
 Live `0.7.3-alpha` logs exposed a separate Xiaomi lifecycle defect. After the

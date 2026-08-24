@@ -223,6 +223,7 @@ grep -q '^TARGET_INSTALLABLE=1$' \
     "$MODULE_STAGE/targets/android-17/target.conf"
 test -r "$MODULE_STAGE/targets/android-16/baselines/nezha-sm8850-canoe.conf"
 test -r "$MODULE_STAGE/targets/android-16/baselines/dada-sm8750-sun.conf"
+test -r "$MODULE_STAGE/targets/android-16/baselines/byron-sm8850-canoe.conf"
 test -r "$MODULE_STAGE/targets/android-16/baselines/pandora-sm8850-canoe.conf"
 test -r "$MODULE_STAGE/targets/android-17/baselines/nezha-sm8850-canoe.conf"
 grep -q 'patch_source_for' "$MODULE_STAGE/customize.sh"
