@@ -5,6 +5,16 @@
 .extern MUTEX_UNLOCK
 .extern PUDDING_RATE_RETURN
 
+#ifndef A16_POINTER_LAYOUT_SHIFT
+#define A16_POINTER_LAYOUT_SHIFT 0
+#endif
+
+.equ A16_POINTER_USECASE_OFFSET, 0x350 + A16_POINTER_LAYOUT_SHIFT
+.equ A16_POINTER_CONFIG_OFFSET, 0x760 + A16_POINTER_LAYOUT_SHIFT
+.equ A16_POINTER_MUTEX_OFFSET, 0x790 + A16_POINTER_LAYOUT_SHIFT
+.equ A16_POINTER_CACHED_ATTR_OFFSET, 0x7e8 + A16_POINTER_LAYOUT_SHIFT
+.equ A16_POINTER_PAL_HANDLE_OFFSET, 0x3a0 + A16_POINTER_LAYOUT_SHIFT
+
 .section .a16_pudding_sampling_rate_handler, "ax"
 .p2align 2
 .global a16_pudding_sampling_rate_handler
@@ -46,16 +56,16 @@ a16_pudding_sampling_rate_handler:
 .Lvalid_rate:
     // Only the native HIFI usecase participates in rate following.  Reject
     // other streams before reading or changing any private object state.
-    ldrh    w10, [x21, #0x350]
+    ldrh    w10, [x21, #A16_POINTER_USECASE_OFFSET]
     cmp     w10, #3
     b.ne    .Lresume
 
     // This Android 16 layout stores both objects by pointer.  Validate both
     // before changing either one so an unexpected layout cannot leave split
     // rate state.
-    ldr     x10, [x21, #0x7e8]
+    ldr     x10, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]
     cbz     x10, .Lresume
-    ldr     x11, [x21, #0x760]
+    ldr     x11, [x21, #A16_POINTER_CONFIG_OFFSET]
     cbz     x11, .Lresume
     ldr     w12, [x10, #0x40]
     cmp     w12, w9
@@ -64,19 +74,19 @@ a16_pudding_sampling_rate_handler:
     // If a PAL stream is live, close the old-rate stream first.  Keep the
     // requested rate and standby result in our own aligned stack frame because
     // all three calls may clobber caller-saved registers.
-    ldr     x10, [x21, #0x3a0]
+    ldr     x10, [x21, #A16_POINTER_PAL_HANDLE_OFFSET]
     cbz     x10, .Lcommit
 
     // This is the same configure mutex used by the stock configure() method.
     // The inspected standby wrapper does not acquire it itself.
     sub     sp, sp, #16
     str     w9, [sp]
-    add     x0, x21, #0x790
+    add     x0, x21, #A16_POINTER_MUTEX_OFFSET
     bl      MUTEX_LOCK
     mov     x0, x21
     bl      PUDDING_STANDBY
     str     w0, [sp, #4]
-    add     x0, x21, #0x790
+    add     x0, x21, #A16_POINTER_MUTEX_OFFSET
     bl      MUTEX_UNLOCK
     ldr     w12, [sp, #4]
     ldr     w9, [sp]
@@ -85,9 +95,9 @@ a16_pudding_sampling_rate_handler:
 
     // standby() may update private state, so re-load and re-check both
     // pointers before committing the new rate.
-    ldr     x10, [x21, #0x7e8]
+    ldr     x10, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]
     cbz     x10, .Lresume
-    ldr     x11, [x21, #0x760]
+    ldr     x11, [x21, #A16_POINTER_CONFIG_OFFSET]
     cbz     x11, .Lresume
 
 .Lcommit:

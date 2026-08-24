@@ -2,7 +2,7 @@
 
 ## 中文
 
-面向 Xiaomi 17 系列 Qualcomm AIDL 音频栈的 USB DAC 自适应采样率模块。
+面向 Xiaomi / Redmi Qualcomm AIDL 音频栈的 USB DAC 自适应采样率模块。
 当前实机目标为 Xiaomi 17 Ultra Android 17；指定播放器通过系统原生
 `hifi_playback` 路径输出，采样率可随音轨在 44.1、48、88.2、96、176.4、
 192 和 384 kHz 之间切换。
@@ -17,6 +17,7 @@
 | Xiaomi 17 Max | `byron` | Android 16 / API 36<br>`OS3.0.308.0.WAFCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
 | Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
 | Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
+| Redmi K90 Pro Max | `myron` | Android 16 / API 36<br>`OS3.0.308.0.WPMCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / 独立偏移布局移植 |
 | Xiaomi 15 | `dada` | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v2 / PAL 工作线程移植 |
 
 “实机验证”表示已在设备、USB DAC 和实际播放器上测试；“理论适配”表示已从
@@ -74,7 +75,7 @@ AIDL/HIDL 世代和接口版本，`usecases/` 保存对应的修改方案。安�
 AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写入地址。
 
 未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示警告，然后执行相同的
-结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。六个 Android 16
+结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。七个 Android 16
 基线均已通过 OTA 库的离线注入和两次应用幂等验证，且允许在确认“尚未实机验证”
 后安装。
 
@@ -187,8 +188,8 @@ bash scripts/collect_device_port.sh issue --capture-transitions
 
 ## English
 
-An adaptive USB DAC sample-rate module for the Qualcomm AIDL audio stack used
-by the Xiaomi 17 family.
+An adaptive USB DAC sample-rate module for Xiaomi and Redmi devices using the
+Qualcomm AIDL audio stack.
 
 The current hardware target is Xiaomi 17 Ultra on Android 17. A specified player
 outputs through the system native `hifi_playback` path, and the sample rate can
@@ -204,6 +205,7 @@ follow the track between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 | Xiaomi 17 Max     | `byron`    | Android 16 / API 36<br>`OS3.0.308.0.WAFCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
 | Xiaomi 17 Pro     | `pandora`  | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
 | Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
+| Redmi K90 Pro Max | `myron`    | Android 16 / API 36<br>`OS3.0.308.0.WPMCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / shifted-layout port    |
 | Xiaomi 15         | `dada`     | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v2 / PAL worker migration   |
 
 “Hardware verified” means that the module has been tested on the actual device,
@@ -292,7 +294,7 @@ used as write addresses.
 
 An unrecorded Qualcomm device receives a prominent warning before the same
 structural checks run. Zero or multiple matches, unknown layouts and mixed
-patch states abort. All six Android 16 baselines passed offline injection and
+patch states abort. All seven Android 16 baselines passed offline injection and
 two-pass idempotence checks against extracted OTA libraries and are enabled
 after acknowledging that hardware validation is missing. None of this
 certifies runtime stability or strict bit-perfect output.

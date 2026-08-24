@@ -121,7 +121,8 @@ if [[ ${HAL_PATCH_KIND:-} == dada-worker-rate-handler ]]; then
         echo "Dada mixed hook state was not rejected" >&2
         exit 1
     fi
-elif [[ ${HAL_PATCH_KIND:-} == a16-pointer-rate-handler ]]; then
+elif [[ ${HAL_PATCH_KIND:-} == a16-pointer-rate-handler \
+        || ${HAL_PATCH_KIND:-} == a16-shifted-pointer-rate-handler ]]; then
     mixed_hal=$WORK_DIR/work/hal-mixed.so
     cp -p "$HAL_DEST" "$mixed_hal"
     "$ELFPATCHER" branch "$mixed_hal" "$PUDDING_RATE_SITE" \
