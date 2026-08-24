@@ -21,9 +21,14 @@
 对应实机。理论适配不等于已经确认音频稳定性或严格 Bit Perfect。
 安装理论适配目标时，安装器会显示醒目警告；按任一音量键确认后才会继续。
 
-当前静态白名单包含 Apple Music、网易云音乐、QQ 音乐和 Spotify。Apple Music、
-网易云音乐已经完成实机验证；QQ 音乐和 Spotify 已启用，仍需完成受控实机播放
-矩阵。输出为 USB Audio。Root 支持 Magisk，或带有效 metamodule 的 KernelSU。
+播放器白名单：
+
+- Apple Music（`com.apple.android.music`）
+- 网易云音乐（`com.netease.cloudmusic`）
+- QQ 音乐（`com.tencent.qqmusic`）
+- Spotify（`com.spotify.music`）
+
+输出为 USB Audio。Root 支持 Magisk，或带有效 metamodule 的 KernelSU。
 
 扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。其他 Qualcomm Android 17
 AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一代码签名、对象布局
@@ -173,10 +178,15 @@ bit-perfect output.
 For a theoretical target, the installer shows a prominent warning and waits
 for either volume key before continuing.
 
-The static allowlist contains Apple Music, NetEase Cloud Music, QQ Music and
-Spotify. Hardware testing currently covers Apple Music and NetEase Cloud Music
-over USB Audio; QQ Music and Spotify are enabled pending the controlled player
-matrix. Root support is Magisk or KernelSU with an active metamodule.
+Player allowlist:
+
+- Apple Music (`com.apple.android.music`)
+- NetEase Cloud Music (`com.netease.cloudmusic`)
+- QQ Music (`com.tencent.qqmusic`)
+- Spotify (`com.spotify.music`)
+
+Output is USB Audio. Root support is Magisk or KernelSU with an active
+metamodule.
 
 Speaker, Bluetooth, analogue and mixed routes are left untouched. Other
 Qualcomm Android 17 AIDL audio baselines receive an unverified warning and may

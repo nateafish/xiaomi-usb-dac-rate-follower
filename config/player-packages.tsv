@@ -1,5 +1,5 @@
-# Package	Display name	Validation
-com.apple.android.music	Apple Music	hardware
-com.netease.cloudmusic	NetEase Cloud Music	hardware
-com.tencent.qqmusic	QQ Music	pending
-com.spotify.music	Spotify	pending
+# Package	Display name
+com.apple.android.music	Apple Music
+com.netease.cloudmusic	NetEase Cloud Music
+com.tencent.qqmusic	QQ Music
+com.spotify.music	Spotify

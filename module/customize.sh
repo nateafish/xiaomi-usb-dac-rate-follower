@@ -117,7 +117,7 @@ PLAYER_MANIFEST=$MODPATH/config/player-packages.tsv
 [ -r "$PLAYER_MANIFEST" ] || abort "! Missing player package manifest"
 PLAYER_LABELS=
 player_tab=$(printf '\t')
-while IFS="$player_tab" read -r player_package player_label player_validation; do
+while IFS="$player_tab" read -r player_package player_label; do
     case "$player_package" in
         ''|'#'*) continue ;;
     esac

@@ -17,7 +17,7 @@ temp_output=$(mktemp "${TMPDIR:-/tmp}/player-packages.XXXXXX")
 trap 'rm -f "$temp_output"' EXIT
 
 count=0
-while IFS=$'\t' read -r package display_name validation extra; do
+while IFS=$'\t' read -r package display_name extra; do
     [[ -n "$package" && ${package:0:1} != "#" ]] || continue
     [[ -z "${extra:-}" ]] || {
         echo "too many fields for player package: $package" >&2
@@ -31,13 +31,6 @@ while IFS=$'\t' read -r package display_name validation extra; do
         echo "missing display name for player package: $package" >&2
         exit 1
     }
-    case "$validation" in
-        hardware|pending) ;;
-        *)
-            echo "invalid validation state for player package: $package" >&2
-            exit 1
-            ;;
-    esac
     grep -Fqx ".asciz \"$package\"" "$temp_output" 2>/dev/null && {
         echo "duplicate player package: $package" >&2
         exit 1

@@ -5,13 +5,10 @@ OS4.0.0.15.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
 when all semantic ELF and layout checks match, and are reported as unverified.
 
 Supported players:
-- com.apple.android.music
-- com.netease.cloudmusic
-- com.tencent.qqmusic
-- com.spotify.music
-
-Hardware validation currently covers Apple Music and NetEase Cloud Music.
-QQ Music and Spotify are enabled pending controlled device validation.
+- Apple Music (com.apple.android.music)
+- NetEase Cloud Music (com.netease.cloudmusic)
+- QQ Music (com.tencent.qqmusic)
+- Spotify (com.spotify.music)
 
 Supported output:
 - USB Audio only
