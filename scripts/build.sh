@@ -104,6 +104,18 @@ python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/android-16/pudding_sampling_rate_handler.S" \
     -o "$BUILD_DIR/a16_pudding_sampling_rate_handler.o"
+python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
+    --readelf "$LLVM_BIN/llvm-readelf" \
+    --object "$BUILD_DIR/a16_pudding_sampling_rate_handler.o" \
+    --section .rela.a16_pudding_sampling_rate_handler \
+    --prefix A16_POINTER_RATE \
+    --output "$BUILD_DIR/a16_pointer_rate.relocations.conf" \
+    --expect STR_PARMS_GET_STR=R_AARCH64_CALL26 \
+    --expect ATOI=R_AARCH64_CALL26 \
+    --expect MUTEX_LOCK=R_AARCH64_CALL26 \
+    --expect PUDDING_STANDBY=R_AARCH64_CALL26 \
+    --expect MUTEX_UNLOCK=R_AARCH64_CALL26 \
+    --expect PUDDING_RATE_RETURN=R_AARCH64_JUMP26
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/android-16/dada_sampling_rate_handler.S" \
     -o "$BUILD_DIR/a16_dada_sampling_rate_handler.o"
@@ -155,6 +167,9 @@ require_size "$BUILD_DIR/a16_dada_rate_worker.template.bin" 128
 python3 "$ROOT_DIR/tests/dada_payload_binary_contract.py" \
     "$BUILD_DIR/a16_dada_rate_parameter.template.bin" \
     "$BUILD_DIR/a16_dada_rate_worker.template.bin"
+python3 "$ROOT_DIR/tests/a16_pointer_rate_payload_contract.py" \
+    "$BUILD_DIR/a16_pudding_sampling_rate_handler.template.bin" \
+    "$BUILD_DIR/a16_pointer_rate.relocations.conf"
 grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.template.bin"

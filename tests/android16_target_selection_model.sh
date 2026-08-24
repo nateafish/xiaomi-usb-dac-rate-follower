@@ -83,7 +83,7 @@ fi
 TEST_DEVICE=pandora TEST_SOC=SM8850 TEST_BOARD=canoe
 pandora_result=$(run_selection)
 [[ "$pandora_result" == \
-    'pandora-sm8850-canoe-aidl-v3|/vendor/lib64/libdev_usb.so|policy-hifi-with-pudding-rate-handler' ]]
+    'pandora-sm8850-canoe-aidl-v3|/vendor/lib64/libdev_usb.so|policy-hifi-with-pointer-rate-handler' ]]
 
 sed -i.bak 's/<version>3<\/version>/<version>1<\/version>/' "$MANIFEST"
 TEST_DEVICE=dada TEST_SOC=SM8750 TEST_BOARD=sun

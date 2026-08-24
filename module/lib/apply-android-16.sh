@@ -13,6 +13,8 @@
     || abort "! Missing Xiaomi 15 parameter relocation manifest"
 . "$MODPATH/patches/a16_dada_rate_worker.relocations.conf" \
     || abort "! Missing Xiaomi 15 worker relocation manifest"
+. "$MODPATH/patches/a16_pointer_rate.relocations.conf" \
+    || abort "! Missing Android 16 pointer-rate relocation manifest"
 . "$MODPATH/lib/elf-runtime.sh"
 
 apply_target_patches() {
@@ -118,14 +120,14 @@ apply_target_patches() {
     elif pudding_match=$($ELFPATCHER find "$HAL_DEST" \
             "symbol:$PUDDING_RATE_FUNCTION" \
             "$PUDDING_RATE_CONTEXT" 2>/dev/null); then
-        HAL_PATCH_KIND=pudding-rate-handler
+        HAL_PATCH_KIND=a16-pointer-rate-handler
     else
-        abort "! Android 16 Qualcomm HAL is not a supported Dada, Nezha or Pudding layout"
+        abort "! Android 16 Qualcomm HAL layout is unsupported"
     fi
 
     case "${BASELINE_PATCH_PROFILE:-}:$HAL_PATCH_KIND" in
         policy-hifi-with-dada-worker-rate-handler:dada-worker-rate-handler|\
-        policy-hifi-with-pudding-rate-handler:pudding-rate-handler|\
+        policy-hifi-with-pointer-rate-handler:a16-pointer-rate-handler|\
         native-hifi-usecase-guard:nezha-usecase-guard|'':*) ;;
         *) abort "! Recorded patch profile does not match the Qualcomm HAL layout" ;;
     esac
@@ -238,86 +240,86 @@ apply_target_patches() {
     else
         ep_find "$HAL_DEST" "symbol:$PUDDING_RATE_FUNCTION" \
             "$PUDDING_PLATFORM_CONFIG_LAYOUT" \
-            'Pudding Platform/AudioPortConfig pointer layout' >/dev/null \
-            || abort "! Pudding Platform/AudioPortConfig layout is incompatible"
+            'Android 16 Platform/AudioPortConfig pointer layout' >/dev/null \
+            || abort "! Android 16 Platform/AudioPortConfig layout is incompatible"
         ep_find "$HAL_DEST" "symbol:$PUDDING_RATE_FUNCTION" \
             "$PUDDING_CACHED_ATTR_LAYOUT" \
-            'Pudding cached PAL-attribute layout' >/dev/null \
-            || abort "! Pudding cached PAL-attribute layout is incompatible"
+            'Android 16 cached PAL-attribute layout' >/dev/null \
+            || abort "! Android 16 cached PAL-attribute layout is incompatible"
         ep_find "$HAL_DEST" "symbol:$PUDDING_CONFIGURE_FUNCTION" \
             "$PUDDING_CONFIG_MUTEX_LAYOUT" \
-            'Pudding configure-mutex layout' >/dev/null \
-            || abort "! Pudding configure mutex is incompatible"
+            'Android 16 configure-mutex layout' >/dev/null \
+            || abort "! Android 16 configure mutex is incompatible"
         ep_find "$HAL_DEST" "symbol:$PUDDING_CONFIGURE_FUNCTION" \
             "$PUDDING_SAMPLE_RATE_LAYOUT" \
-            'Pudding AudioPortConfig sample-rate layout' >/dev/null \
-            || abort "! Pudding sample-rate field is incompatible"
+            'Android 16 AudioPortConfig sample-rate layout' >/dev/null \
+            || abort "! Android 16 sample-rate field is incompatible"
         ep_find "$HAL_DEST" "symbol:$PUDDING_STANDBY_SYMBOL" \
             "$PUDDING_USECASE_TAG_LAYOUT" \
-            'Pudding usecase-tag layout' >/dev/null \
-            || abort "! Pudding usecase tag is incompatible"
+            'Android 16 usecase-tag layout' >/dev/null \
+            || abort "! Android 16 usecase tag is incompatible"
         ep_find "$HAL_DEST" \
             'symbol:_ZN3qti5audio4core16StreamOutPrimary7standbyEv' \
             "$PUDDING_PAL_HANDLE_LAYOUT" \
-            'Pudding PAL-handle layout' >/dev/null \
-            || abort "! Pudding PAL handle is incompatible"
+            'Android 16 PAL-handle layout' >/dev/null \
+            || abort "! Android 16 PAL handle is incompatible"
 
         PUDDING_RATE_SITE=$(offset_add "$pudding_match" \
             "$PUDDING_RATE_SITE_DELTA")
         pudding_cave_anchor=$(ep_find "$HAL_DEST" exec \
-            "$PUDDING_CAVE_ANCHOR" 'Pudding linker-gap owner') \
-            || abort "! Cannot resolve the Pudding executable-gap owner"
+            "$PUDDING_CAVE_ANCHOR" 'Android 16 linker-gap owner') \
+            || abort "! Cannot resolve the Android 16 executable-gap owner"
         PUDDING_CAVE_BASE=$(offset_add "$pudding_cave_anchor" \
             "$PUDDING_CAVE_ANCHOR_SIZE")
         PUDDING_CAVE_OWNER=$(ep_plt "$HAL_DEST" \
-            "$PUDDING_CAVE_OWNER_PLT" 'Pudding linker-gap owner call') \
-            || abort "! Cannot resolve the Pudding linker-gap owner call"
+            "$PUDDING_CAVE_OWNER_PLT" 'Android 16 linker-gap owner call') \
+            || abort "! Cannot resolve the Android 16 linker-gap owner call"
         branch_points_to "$HAL_DEST" \
             "$(offset_add "$pudding_cave_anchor" \
                 "$PUDDING_CAVE_OWNER_CALL_DELTA")" "$PUDDING_CAVE_OWNER" \
-            || abort "! Pudding executable gap is not owned by the expected function"
+            || abort "! Android 16 executable gap has an unexpected owner"
         require_stock_or_hook_branch "$HAL_DEST" "$PUDDING_RATE_SITE" \
             "$PUDDING_RATE_STOCK" "$PUDDING_CAVE_BASE" \
-            'Pudding sampling_rate hook'
+            'Android 16 sampling_rate hook'
         if hex_at "$HAL_DEST" "$PUDDING_RATE_SITE" \
                 "$PUDDING_RATE_STOCK"; then
             resolved_pudding_cave=$(ep_cave_after "$HAL_DEST" \
                 "$pudding_cave_anchor" "$PUDDING_CAVE_ANCHOR_SIZE" \
                 "$PUDDING_CAVE_REQUIRED_SIZE" "$PUDDING_CAVE_ALIGNMENT" \
-                'Pudding sampling_rate executable cave') \
-                || abort "! Cannot allocate the Pudding sampling_rate cave"
+                'Android 16 sampling_rate executable cave') \
+                || abort "! Cannot allocate the Android 16 sampling_rate cave"
             [ $(( resolved_pudding_cave )) -eq \
                     $(( PUDDING_CAVE_BASE )) ] \
-                || abort "! Pudding linker-gap geometry changed unexpectedly"
+                || abort "! Android 16 linker-gap geometry changed unexpectedly"
         fi
 
         PUDDING_STR_PARMS_GET_STR=$(ep_plt "$HAL_DEST" \
-            "$PUDDING_STR_PARMS_GET_STR_PLT" 'Pudding str_parms_get_str') \
-            || abort "! Cannot resolve Pudding str_parms_get_str"
+            "$PUDDING_STR_PARMS_GET_STR_PLT" 'Android 16 str_parms_get_str') \
+            || abort "! Cannot resolve Android 16 str_parms_get_str"
         PUDDING_ATOI=$(ep_plt "$HAL_DEST" "$PUDDING_ATOI_PLT" \
-            'Pudding atoi') || abort "! Cannot resolve Pudding atoi"
+            'Android 16 atoi') || abort "! Cannot resolve Android 16 atoi"
         PUDDING_MUTEX_LOCK=$(ep_plt "$HAL_DEST" \
-            "$PUDDING_MUTEX_LOCK_PLT" 'Pudding mutex lock') \
-            || abort "! Cannot resolve Pudding mutex lock"
+            "$PUDDING_MUTEX_LOCK_PLT" 'Android 16 mutex lock') \
+            || abort "! Cannot resolve Android 16 mutex lock"
         PUDDING_MUTEX_UNLOCK=$(ep_plt "$HAL_DEST" \
-            "$PUDDING_MUTEX_UNLOCK_PLT" 'Pudding mutex unlock') \
-            || abort "! Cannot resolve Pudding mutex unlock"
+            "$PUDDING_MUTEX_UNLOCK_PLT" 'Android 16 mutex unlock') \
+            || abort "! Cannot resolve Android 16 mutex unlock"
         PUDDING_STANDBY=$(ep_symbol "$HAL_DEST" \
-            "$PUDDING_STANDBY_SYMBOL" 'Pudding standby') \
-            || abort "! Cannot resolve Pudding standby"
+            "$PUDDING_STANDBY_SYMBOL" 'Android 16 standby') \
+            || abort "! Cannot resolve Android 16 standby"
 
         $ELFPATCHER inject "$HAL_DEST" "$PUDDING_CAVE_BASE" \
             "$MODPATH/patches/a16_pudding_sampling_rate_handler.template.bin" \
-            "16:BL:$PUDDING_STR_PARMS_GET_STR" \
-            "28:BL:$PUDDING_ATOI" \
-            "164:BL:$PUDDING_MUTEX_LOCK" \
-            "172:BL:$PUDDING_STANDBY" \
-            "180:BL:$PUDDING_MUTEX_UNLOCK" \
-            "188:B:$(offset_add "$PUDDING_RATE_SITE" 4)" \
-            || abort "! Pudding sampling_rate handler injection failed"
+            "${A16_POINTER_RATE_STR_PARMS_GET_STR}:$PUDDING_STR_PARMS_GET_STR" \
+            "${A16_POINTER_RATE_ATOI}:$PUDDING_ATOI" \
+            "${A16_POINTER_RATE_MUTEX_LOCK}:$PUDDING_MUTEX_LOCK" \
+            "${A16_POINTER_RATE_PUDDING_STANDBY}:$PUDDING_STANDBY" \
+            "${A16_POINTER_RATE_MUTEX_UNLOCK}:$PUDDING_MUTEX_UNLOCK" \
+            "${A16_POINTER_RATE_PUDDING_RATE_RETURN}:$(offset_add "$PUDDING_RATE_SITE" 4)" \
+            || abort "! Android 16 sampling_rate handler injection failed"
         $ELFPATCHER branch "$HAL_DEST" "$PUDDING_RATE_SITE" \
             "$PUDDING_CAVE_BASE" B \
-            || abort "! Pudding sampling_rate hook relocation failed"
+            || abort "! Android 16 sampling_rate hook relocation failed"
     fi
 
     branch_points_to "$POLICY_DEST" "$SELECT_SITE" "$CAVE_BASE" \
@@ -336,10 +338,10 @@ apply_target_patches() {
         branch_points_to "$HAL_DEST" "$DADA_WORKER_SITE" \
             "$DADA_WORKER_CAVE" \
             || abort "! Dada sampling_rate worker verification failed"
-    elif [ "$HAL_PATCH_KIND" = pudding-rate-handler ]; then
+    elif [ "$HAL_PATCH_KIND" = a16-pointer-rate-handler ]; then
         branch_points_to "$HAL_DEST" "$PUDDING_RATE_SITE" \
             "$PUDDING_CAVE_BASE" \
-            || abort "! Pudding sampling_rate hook verification failed"
+            || abort "! Android 16 sampling_rate hook verification failed"
     fi
 
     USB_TABLE_SITE=$(ep_symbol "$USB_DEST" "$USB_RATE_SYMBOL" \
@@ -351,6 +353,6 @@ apply_target_patches() {
     elif [ "$HAL_PATCH_KIND" = nezha-usecase-guard ]; then
         ui_print "- Offline Android 16 map: Qualcomm-HAL=$QTI_SITE"
     else
-        ui_print "- Offline Android 16 map: Pudding-HAL=$PUDDING_RATE_SITE cave=$PUDDING_CAVE_BASE"
+        ui_print "- Offline Android 16 map: pointer-HAL=$PUDDING_RATE_SITE cave=$PUDDING_CAVE_BASE"
     fi
 }

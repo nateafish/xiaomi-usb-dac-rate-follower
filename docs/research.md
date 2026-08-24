@@ -236,14 +236,17 @@ flags to `DEEP_BUFFER_PLAYBACK` (usecase 3), matching Pudding's flagless
 `hifi_playback` policy port.
 
 What Pudding actually compiled out is the `sampling_rate` block in
-`MiStreamOutPrimary::setVendorParameters()`. The Pudding-specific payload:
+`MiStreamOutPrimary::setVendorParameters()`. The shared Android 16
+pointer-layout payload:
 
-- accepts only 44.1/48 kHz families through 352.8/384 kHz;
-- updates cached PAL sample rate at `+0x40`;
-- sets `AudioPortConfig.sampleRate` value at `+0x8` and its discriminator at
-  `+0xc`;
-- for live usecase 3 only, uses Pudding's own configure mutex and concrete
-  `standby()`; and
+- accepts exactly 44.1/48/88.2/96/176.4/192/384 kHz, consistently omitting
+  352.8 kHz from the module's seven-rate contract;
+- rejects every non-usecase-3 stream before reading or writing private rate
+  state;
+- for a live usecase-3 PAL stream, calls the concrete `standby()` under the
+  inspected configure mutex and abandons the update if standby fails;
+- only after a successful standby, publishes `AudioPortConfig.sampleRate` at
+  `+0x8`, its discriminator at `+0xc`, and the cached PAL rate at `+0x40`; and
 - returns to the stock parameter destruction and status path.
 
 The payload lives in a linker-owned executable zero gap whose owner call,
@@ -265,8 +268,8 @@ anchor: `AudioPortConfig*`, cached PAL attributes, configure mutex, sample-rate
 field/discriminator, usecase tag, PAL handle and the linker-owned executable
 gap. Its flagless ODM `hifi_playback` port maps to Deep Buffer usecase 3 and it
 also lacks the static `HifiPlayback` helper. The correct adaptation is therefore
-the Pudding-family `sampling_rate` handler combined with the common semantic
-policy/MixerThread/USB patches. Two-pass offline application is byte-idempotent;
+the Android 16 pointer-layout `sampling_rate` handler combined with the common
+semantic policy/MixerThread/USB patches. Two-pass offline application is byte-idempotent;
 hardware behavior remains unverified.
 
 ## Idle 384 kHz retention

@@ -121,6 +121,30 @@ if [[ ${HAL_PATCH_KIND:-} == dada-worker-rate-handler ]]; then
         echo "Dada mixed hook state was not rejected" >&2
         exit 1
     fi
+elif [[ ${HAL_PATCH_KIND:-} == a16-pointer-rate-handler ]]; then
+    mixed_hal=$WORK_DIR/work/hal-mixed.so
+    cp -p "$HAL_DEST" "$mixed_hal"
+    "$ELFPATCHER" branch "$mixed_hal" "$PUDDING_RATE_SITE" \
+        "$((PUDDING_RATE_SITE + 4))" B
+    if (
+        HAL_DEST=$mixed_hal
+        apply_target_patches
+    ) >/dev/null 2>&1; then
+        echo "Android 16 mixed pointer-rate hook state was not rejected" >&2
+        exit 1
+    fi
+elif [[ ${HAL_PATCH_KIND:-} == nezha-usecase-guard ]]; then
+    mixed_hal=$WORK_DIR/work/hal-mixed.so
+    cp -p "$HAL_DEST" "$mixed_hal"
+    "$ELFPATCHER" branch "$mixed_hal" "$QTI_SITE" \
+        "$((QTI_SITE + 4))" B
+    if (
+        HAL_DEST=$mixed_hal
+        apply_target_patches
+    ) >/dev/null 2>&1; then
+        echo "Android 16 mixed Qualcomm guard state was not rejected" >&2
+        exit 1
+    fi
 fi
 
 echo "offline target validation: PASS ($TARGET_ID${BASELINE_ID:+ / $BASELINE_ID})"

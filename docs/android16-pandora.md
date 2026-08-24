@@ -12,8 +12,9 @@
 
 The complete OTA
 `pandora-ota_full-OS3.0.318.0.WBLCNXM-user-16.0-082e9f32b8.zip` was decoded
-into the separate `port-pandora` tree.  The existing Xiaomi 15 `port` tree was
-not overwritten.
+independently. After validation, only the six core audio ELF files were kept
+in the local work tree; intermediate images and complete partition trees were
+removed.
 
 ## Audio-stack classification
 
@@ -31,9 +32,9 @@ only to `usb_device_out` and `usb_headset`.  The core HAL exports
 `DeepBufferPlayback` and `BitPerfectPlayback`, but not `HifiPlayback`, so the
 flagless HIFI port follows the Pudding/Popsicle Deep Buffer usecase-3 layout.
 
-Pandora therefore reuses the reviewed Pudding-family `sampling_rate` handler;
-it does not use the Dada AIDL-v2 worker trampoline or the Nezha usecase-13
-guard.
+Pandora therefore reuses the reviewed Android 16 pointer-layout
+`sampling_rate` handler; it does not use the Dada AIDL-v2 worker trampoline or
+the Nezha usecase-13 guard.
 
 ## Offline validation
 
@@ -43,7 +44,7 @@ The Android 16 patch driver resolved every Pandora site independently:
 - policy executable cave: `0xb9520`;
 - MixerThread HAL synchronization branch: `0x154310`;
 - Qualcomm USB rate table: `0x7150`;
-- Pudding-family HAL rate hook: `0x1cc63c`;
+- Android 16 HAL rate hook: `0x1cc63c`;
 - HAL executable cave: `0x11f1d4`.
 
 These offsets are diagnostics only.  Installation resolves the function-local

@@ -23,7 +23,7 @@ canoe, AIDL generation and the semantic ELF checks.
 | `libaudiopolicymanagerimpl.so` | `334e161add5b3079d48aa3fd7eb3097c` | byte-identical to Nezha Android 16 |
 | `libaudioflingerimpl.so` | `b5248898a4bdb0f1663b73e2c1638f75` | Popsicle build; shared MixerThread signature |
 | `libdev_usb.so` | `e7bf22d554aff10814bb908f68cacd43` | byte-identical to Pudding Android 16 |
-| `libaudiocorehal.qti.so` | `c1962c089701a4cf151c86ccc03a480a` | distinct build; Pudding-family layout |
+| `libaudiocorehal.qti.so` | `c1962c089701a4cf151c86ccc03a480a` | distinct build; shared Android 16 pointer layout |
 
 `audiohalservice.qti` is byte-identical to Pudding. The default core HAL is
 byte-identical across Nezha, Pudding and Popsicle.
@@ -62,8 +62,8 @@ the actual file.
 
 The Android 16 driver successfully applied the native HIFI route, dynamic
 default, MixerThread synchronization, Qualcomm USB 44.1 kHz table fix and
-Pudding-family HAL rate handler to copied Popsicle OTA files. A second complete
-application was byte-identical to the first.
+Android 16 pointer-layout HAL rate handler to copied Popsicle OTA files. A
+second complete application was byte-identical to the first.
 
 `popsicle-sm8850-canoe-aidl-v3` is recorded as theoretically validated from
 the offline OTA. Installation is allowed after a warning and volume-key
