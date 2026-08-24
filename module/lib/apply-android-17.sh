@@ -7,6 +7,8 @@
 . "$TARGET_DIR/usecases/mixer-hal-sync.conf"
 . "$TARGET_DIR/usecases/usb-441-rate-table.conf"
 . "$TARGET_DIR/usecases/qti-hifi-reconfigure.conf"
+. "$MODPATH/patches/a17_native_hifi_cave.relocations.conf" \
+    || abort "! Missing Android 17 native HIFI relocation manifest"
 . "$MODPATH/lib/elf-runtime.sh"
 
 apply_target_patches() {
@@ -51,6 +53,16 @@ apply_target_patches() {
     cave_anchor=$(ep_find "$POLICY_DEST" exec "$LIFECYCLE_CAVE_ANCHOR" \
         'native executable-cave anchor') || abort "! Cannot resolve executable cave"
     CAVE_BASE=$(offset_add "$cave_anchor" "$LIFECYCLE_CAVE_DELTA")
+    SELECT_CAVE=$(offset_add "$CAVE_BASE" \
+        "$A17_NATIVE_HIFI_SYMBOL_NATIVE_HIFI_SELECT_HOOK")
+    APP_CAVE=$(offset_add "$CAVE_BASE" \
+        "$A17_NATIVE_HIFI_SYMBOL_NATIVE_HIFI_APP_FILTER")
+    ACTIVE_CAVE=$(offset_add "$CAVE_BASE" \
+        "$A17_NATIVE_HIFI_SYMBOL_LATEST_MAX_IDLE_RATE")
+    FINAL_CAVE=$(offset_add "$CAVE_BASE" \
+        "$A17_NATIVE_HIFI_SYMBOL_LATEST_MAX_IDLE_TRANSITION")
+    NATIVE_USB_HELPER=$(offset_add "$CAVE_BASE" \
+        "$A17_NATIVE_HIFI_SYMBOL_NATIVE_HIFI_USB_ONLY_OUTPUT")
     IDLE_CAVE=$(offset_add "$CAVE_BASE" 788)
     GATE_CAVE=$(offset_add "$CAVE_BASE" 820)
     DEFAULT_CAVE=$(offset_add "$CAVE_BASE" 960)
@@ -76,17 +88,14 @@ apply_target_patches() {
     ZERO_PATH=$(ep_find "$POLICY_DEST" "symbol:$USB_GATE_FUNCTION" \
         "$USB_GATE_ZERO_CONTEXT" 'sampling-rate zero path') \
         || abort "! Cannot resolve sampling-rate zero path"
-    NATIVE_USB_HELPER=$(offset_add "$CAVE_BASE" \
-        "$ROUTE_NATIVE_USB_HELPER_DELTA")
-
     require_call_or_hook_branch "$POLICY_DEST" "$SELECT_SITE" \
-        "$VENDOR_SELECT" "$CAVE_BASE" 'selectOutput hook'
+        "$VENDOR_SELECT" "$SELECT_CAVE" 'selectOutput hook'
     require_stock_or_hook_branch "$POLICY_DEST" "$APP_SITE" \
-        "$ROUTE_APP_STOCK" "$(offset_add "$CAVE_BASE" 256)" 'application filter'
+        "$ROUTE_APP_STOCK" "$APP_CAVE" 'application filter'
     require_stock_or_hook_branch "$POLICY_DEST" "$FINAL_SITE" \
-        "$LIFECYCLE_FINAL_STOCK" "$(offset_add "$CAVE_BASE" 780)" 'final-stop hook'
+        "$LIFECYCLE_FINAL_STOCK" "$FINAL_CAVE" 'final-stop hook'
     require_stock_or_hook_branch "$POLICY_DEST" "$ACTIVE_SITE" \
-        "$LIFECYCLE_ACTIVE_STOCK" "$(offset_add "$CAVE_BASE" 736)" 'active-rate hook'
+        "$LIFECYCLE_ACTIVE_STOCK" "$ACTIVE_CAVE" 'active-rate hook'
     require_stock_or_hook_branch "$POLICY_DEST" "$IDLE_CALLER_SITE" \
         "$LIFECYCLE_IDLE_CALLER_STOCK" "$IDLE_CAVE" 'idle-rate caller'
     require_stock_or_hook_branch "$POLICY_DEST" "$DEFAULT_SITE" \
@@ -96,12 +105,12 @@ apply_target_patches() {
 
     $ELFPATCHER inject "$POLICY_DEST" "$CAVE_BASE" \
         "$MODPATH/patches/native_hifi_cave.template.bin" \
-        "12:BL:$VENDOR_SELECT" \
-        "252:B:$(offset_add "$SELECT_SITE" 4)" \
-        "420:B:$(offset_add "$APP_SITE" 4)" \
-        "764:COND19:$(offset_add "$ACTIVE_SITE" 52)" \
-        "768:B:$(offset_add "$ACTIVE_SITE" 4)" \
-        "784:B:$TRUE_RETURN" \
+        "${A17_NATIVE_HIFI_VENDOR_SELECT_OUTPUT_STUB}:$VENDOR_SELECT" \
+        "${A17_NATIVE_HIFI_SELECT_OUTPUT_RETURN}:$(offset_add "$SELECT_SITE" 4)" \
+        "${A17_NATIVE_HIFI_HIFI_APP_STOCK_CONTINUE}:$(offset_add "$APP_SITE" 4)" \
+        "${A17_NATIVE_HIFI_LATEST_MAX_RATE_EMPTY_RETURN}:$(offset_add "$ACTIVE_SITE" 52)" \
+        "${A17_NATIVE_HIFI_LATEST_MAX_RATE_CONTINUE}:$(offset_add "$ACTIVE_SITE" 4)" \
+        "${A17_NATIVE_HIFI_LATEST_MAX_TRUE_RETURN}:$TRUE_RETURN" \
         || abort "! Native HIFI payload injection failed"
     $ELFPATCHER inject "$POLICY_DEST" "$IDLE_CAVE" \
         "$MODPATH/patches/hifi_idle_rate_cave.template.bin" \
@@ -128,16 +137,13 @@ apply_target_patches() {
         "68:B:$(offset_add "$DEFAULT_SITE" 4)" \
         || abort "! HIFI default-rate payload injection failed"
 
-    $ELFPATCHER branch "$POLICY_DEST" "$SELECT_SITE" "$CAVE_BASE" B \
+    $ELFPATCHER branch "$POLICY_DEST" "$SELECT_SITE" "$SELECT_CAVE" B \
         || abort "! selectOutput branch relocation failed"
-    $ELFPATCHER branch "$POLICY_DEST" "$APP_SITE" \
-        "$(offset_add "$CAVE_BASE" 256)" B \
+    $ELFPATCHER branch "$POLICY_DEST" "$APP_SITE" "$APP_CAVE" B \
         || abort "! HIFI package-filter branch relocation failed"
-    $ELFPATCHER branch "$POLICY_DEST" "$FINAL_SITE" \
-        "$(offset_add "$CAVE_BASE" 780)" B \
+    $ELFPATCHER branch "$POLICY_DEST" "$FINAL_SITE" "$FINAL_CAVE" B \
         || abort "! final-stop branch relocation failed"
-    $ELFPATCHER branch "$POLICY_DEST" "$ACTIVE_SITE" \
-        "$(offset_add "$CAVE_BASE" 736)" B \
+    $ELFPATCHER branch "$POLICY_DEST" "$ACTIVE_SITE" "$ACTIVE_CAVE" B \
         || abort "! active-rate branch relocation failed"
     $ELFPATCHER branch "$POLICY_DEST" "$IDLE_CALLER_SITE" "$IDLE_CAVE" B \
         || abort "! idle-rate caller relocation failed"

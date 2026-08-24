@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
-. "$MODPATH/lib/upgrade-state.sh" \
-    || abort "! Missing upgrade-state helper"
+. "$MODPATH/lib/install-state.sh" \
+    || abort "! Missing install-state helper"
 . "$MODPATH/lib/target-selection.sh" \
     || abort "! Missing target-selection helper"
 
@@ -10,7 +10,8 @@ chmod 0755 "$ELFPATCHER" 2>/dev/null \
     || abort "! Cannot make the ELF patch engine executable"
 [ -x "$ELFPATCHER" ] || abort "! Missing ELF patch engine"
 
-prepare_upgrade_state
+prepare_install_state \
+    || abort "! A clean uninstall and reboot are required before installation"
 select_audio_target
 
 POLICY_LIVE=$POLICY_PATH
@@ -112,15 +113,30 @@ apply_target_patches
     || abort "! Qualcomm USB library size changed"
 [ "$(stat -c '%s' "$HAL_DEST")" = "$HAL_SIZE" ] \
     || abort "! Qualcomm audio HAL size changed"
-require_binary_string "$POLICY_DEST" com.apple.android.music 'patched package policy'
-require_binary_string "$POLICY_DEST" com.netease.cloudmusic 'patched package policy'
+PLAYER_MANIFEST=$MODPATH/config/player-packages.tsv
+[ -r "$PLAYER_MANIFEST" ] || abort "! Missing player package manifest"
+PLAYER_LABELS=
+player_tab=$(printf '\t')
+while IFS="$player_tab" read -r player_package player_label player_validation; do
+    case "$player_package" in
+        ''|'#'*) continue ;;
+    esac
+    require_binary_string "$POLICY_DEST" "$player_package" \
+        'patched package policy'
+    if [ -z "$PLAYER_LABELS" ]; then
+        PLAYER_LABELS=$player_label
+    else
+        PLAYER_LABELS="$PLAYER_LABELS, $player_label"
+    fi
+done < "$PLAYER_MANIFEST"
 
 ui_print "- AudioPolicyManager SHA-256: $(sha_of "$POLICY_DEST")"
 ui_print "- AudioFlinger SHA-256: $(sha_of "$FLINGER_DEST")"
 ui_print "- Qualcomm USB SHA-256: $(sha_of "$USB_DEST")"
 ui_print "- Qualcomm HAL SHA-256: $(sha_of "$HAL_DEST")"
 
-rm -rf "$MODPATH/patches" "$MODPATH/bin" "$MODPATH/targets"
+rm -rf "$MODPATH/patches" "$MODPATH/bin" "$MODPATH/targets" \
+    "$MODPATH/config"
 set_perm "$POLICY_DEST" 0 0 0644 u:object_r:system_lib_file:s0
 case "$FLINGER_LIVE" in
     /system_ext/*) set_perm "$FLINGER_DEST" 0 0 0644 u:object_r:system_lib_file:s0 ;;
@@ -129,7 +145,7 @@ esac
 set_perm "$USB_DEST" 0 0 0644 u:object_r:vendor_file:s0
 set_perm "$HAL_DEST" 0 0 0644 u:object_r:vendor_file:s0
 
-ui_print "- Packages: Apple Music and NetEase Cloud Music"
+ui_print "- Packages: $PLAYER_LABELS"
 ui_print "- Route: Xiaomi native hifi_playback on USB-only outputs"
 ui_print "- Matching: Android/SoC/HAL baseline plus unique semantic ELF signatures"
 ui_print "- Injection: runtime AArch64 relocation; no fixed file offsets"

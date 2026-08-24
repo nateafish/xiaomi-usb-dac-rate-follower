@@ -3,7 +3,7 @@
 // The routing hook runs at the existing AOSP -> Xiaomi selectOutput callback.
 // Xiaomi's callback is executed first and its result is preserved unless all
 // of these fail-closed conditions are true:
-//   * package is Apple Music or NetEase Cloud Music;
+//   * package is present in the build-time player package table;
 //   * Xiaomi/AOSP selected an output currently routed only to USB;
 //   * an open, USB-routed, non-duplicating hifi_playback descriptor exists.
 //
@@ -84,6 +84,7 @@ hifi_idle_rate_hook:
 .p2align 2
 .global native_hifi_select_hook
 .global native_hifi_app_filter
+.global native_hifi_usb_only_output
 
 // Replaces the call at AudioPolicyManager::selectOutput + 0x968 (VA 0x57214).
 // Live arguments are the exact vendor callback ABI:
@@ -102,12 +103,8 @@ native_hifi_select_hook:
     cbz     x4, .Lselect_done
     ldr     x0, [x2]
     cbz     x0, .Lselect_done
-    adr     x1, .Lapple_utf16
-    bl      .Lutf16_equal
-    cbnz    w0, .Lpackage_allowed
-    ldr     x0, [x2]
-    adr     x1, .Lnetease_utf16
-    bl      .Lutf16_equal
+    adr     x1, .Lpackage_table
+    bl      .Lutf16_in_package_table
     cbz     w0, .Lselect_done
 
 .Lpackage_allowed:
@@ -177,8 +174,12 @@ native_hifi_select_hook:
     add     sp, sp, #0x20
     b       SELECT_OUTPUT_RETURN
 
+    // Keep the independently hooked HIFI application filter at the stable
+    // +256 payload offset used by the runtime relocation manifest.
+    .space  256 - (. - native_hifi_select_hook)
+
 // Entry hook for HifiSampleRateManager::isAppAllowed() at VA 0xd3bcc.
-// Only hifi_playback gets the exact two-package policy. Other profile names
+// Only hifi_playback gets the generated package policy. Other profile names
 // replay the displaced PAC instruction and continue through Xiaomi's body.
 native_hifi_app_filter:
     cbz     x0, .Lapp_stock
@@ -200,26 +201,14 @@ native_hifi_app_filter:
     sub     sp, sp, #0x10
     str     x30, [sp]
     cbz     x1, .Lapp_deny
-    str     x1, [sp, #0x8]
     ldrb    w8, [x1]
     add     x0, x1, #1
     ldr     x9, [x1, #0x10]
     tst     w8, #1
     csel    x0, x0, x9, eq
     cbz     x0, .Lapp_deny
-    adr     x1, .Lapple_name
-    bl      .Lascii_equal
-    cbnz    w0, .Lapp_return
-    // Reload the original application std::string from the spare frame slot.
-    ldr     x1, [sp, #0x8]
-    ldrb    w8, [x1]
-    add     x0, x1, #1
-    ldr     x9, [x1, #0x10]
-    tst     w8, #1
-    csel    x0, x0, x9, eq
-    cbz     x0, .Lapp_deny
-    adr     x1, .Lnetease_name
-    bl      .Lascii_equal
+    adr     x1, .Lpackage_table
+    bl      .Lascii_in_package_table
     b       .Lapp_return
 
 .Lapp_deny:
@@ -233,14 +222,55 @@ native_hifi_app_filter:
     paciasp
     b       HIFI_APP_STOCK_CONTINUE
 
-// x0 UTF-16 data, x1 zero-terminated UTF-16 literal; returns w0 boolean.
-.Lutf16_equal:
-    ldrh    w6, [x0], #2
-    ldrh    w7, [x1], #2
-    cmp     w6, w7
-    b.ne    .Lnot_equal
-    cbnz    w6, .Lutf16_equal
+// x0 UTF-16 data, x1 double-NUL-terminated ASCII package table. Package names
+// are Android ASCII identifiers, so compare widened input code units directly
+// and reject any non-ASCII value. Returns w0 boolean.
+.Lutf16_in_package_table:
+    mov     x5, x0
+.Lutf16_candidate:
+    ldrb    w8, [x1]
+    cbz     w8, .Lnot_equal
+    mov     x0, x5
+.Lutf16_candidate_compare:
+    ldrh    w7, [x0], #2
+    ldrb    w8, [x1], #1
+    cmp     w7, w8
+    b.ne    .Lutf16_candidate_mismatch
+    cbnz    w7, .Lutf16_candidate_compare
     mov     w0, #1
+    ret
+.Lutf16_candidate_mismatch:
+    cbz     w8, .Lutf16_candidate_next
+.Lutf16_candidate_skip:
+    ldrb    w8, [x1], #1
+    cbnz    w8, .Lutf16_candidate_skip
+.Lutf16_candidate_next:
+    b       .Lutf16_candidate
+
+// x0 byte data, x1 double-NUL-terminated ASCII package table.
+.Lascii_in_package_table:
+    mov     x5, x0
+.Lascii_candidate:
+    ldrb    w8, [x1]
+    cbz     w8, .Lnot_equal
+    mov     x0, x5
+.Lascii_candidate_compare:
+    ldrb    w7, [x0], #1
+    ldrb    w8, [x1], #1
+    cmp     w7, w8
+    b.ne    .Lascii_candidate_mismatch
+    cbnz    w7, .Lascii_candidate_compare
+    mov     w0, #1
+    ret
+.Lascii_candidate_mismatch:
+    cbz     w8, .Lascii_candidate_next
+.Lascii_candidate_skip:
+    ldrb    w8, [x1], #1
+    cbnz    w8, .Lascii_candidate_skip
+.Lascii_candidate_next:
+    b       .Lascii_candidate
+.Lnot_equal:
+    mov     w0, wzr
     ret
 
 // x0 byte data, x1 zero-terminated byte literal; returns w0 boolean.
@@ -248,16 +278,17 @@ native_hifi_app_filter:
     ldrb    w2, [x0], #1
     ldrb    w6, [x1], #1
     cmp     w2, w6
-    b.ne    .Lnot_equal
+    b.ne    .Lascii_not_equal
     cbnz    w2, .Lascii_equal
     mov     w0, #1
     ret
-.Lnot_equal:
+.Lascii_not_equal:
     mov     w0, wzr
     ret
 
 // x0 SwAudioOutputDescriptor*; returns w0=1 only for a non-empty route whose
 // every current DeviceDescriptor is one of the three Android USB output types.
+native_hifi_usb_only_output:
 .Lis_usb_only_output:
     cbz     x0, .Lusb_false
     ldr     x6, [x0, #0xf8]
@@ -287,18 +318,15 @@ native_hifi_app_filter:
     ret
 
 .p2align 1
-.Lapple_utf16:
-    .hword  'c','o','m','.','a','p','p','l','e','.','a','n','d','r','o','i','d','.','m','u','s','i','c',0
-.Lnetease_utf16:
-    .hword  'c','o','m','.','n','e','t','e','a','s','e','.','c','l','o','u','d','m','u','s','i','c',0
 .Lhifi_name:
     .asciz  "hifi_playback"
-.Lapple_name:
-    .asciz  "com.apple.android.music"
-.Lnetease_name:
-    .asciz  "com.netease.cloudmusic"
+.Lpackage_table:
+    .include "player_packages.inc"
 
 .p2align 2
+    // Keep lifecycle relocation points stable while allowing the package
+    // matcher and generated table to evolve within their reserved envelope.
+    .space  736 - (. - native_hifi_select_hook)
 .global latest_max_idle_rate
 latest_max_idle_rate:
     // Mirror areAllApplicationsStopped(): the intrusive list at +0x50 may

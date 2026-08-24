@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply v0.7.8 blobs to private stock captures and verify exact regions."""
+"""Apply module blobs to private stock captures and verify exact regions."""
 
 import sys
 import zipfile
@@ -81,7 +81,6 @@ def main() -> None:
         assert len(archive.read("patches/native_hifi_cave.bin")) == 788
         assert len(archive.read("patches/usb_output_gate_cave.bin")) == 140
         assert len(archive.read("patches/usb_output_arbitration_cave.bin")) == 292
-        assert len(archive.read("patches/usb_output_gate_v076_cave.bin")) == 140
         assert len(archive.read("patches/hifi_dynamic_default_cave.bin")) == 86
         assert len(archive.read("patches/hifi_idle_rate_cave.bin")) == 32
         patched_policy = apply(policy, POLICY_PATCHES, archive)
@@ -113,6 +112,8 @@ def main() -> None:
         assert b"hifi_playback" in patched_policy[800_684:801_419]
         assert b"com.apple.android.music" in patched_policy[800_684:801_419]
         assert b"com.netease.cloudmusic" in patched_policy[800_684:801_419]
+        assert b"com.tencent.qqmusic" in patched_policy[800_684:801_419]
+        assert b"com.spotify.music" in patched_policy[800_684:801_419]
         require(patched_policy, 801_420, "092840f9", "application-count idle helper")
         assert b"\x00\x70\x97\x52\xc0\x03\x5f\xd6" in patched_policy[801_420:801_464]
         assert patched_policy[801_472:801_504] == archive.read(
@@ -126,7 +127,7 @@ def main() -> None:
         assert apply(patched_usb, USB_PATCHES, archive) == patched_usb
         assert apply(patched_hal, HAL_PATCHES, archive) == patched_hal
 
-    print("firmware patch verification: stock -> v0.7.8 passed")
+    print("firmware patch verification: stock -> current build passed")
 
 
 if __name__ == "__main__":

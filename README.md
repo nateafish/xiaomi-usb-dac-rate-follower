@@ -21,8 +21,9 @@
 对应实机。理论适配不等于已经确认音频稳定性或严格 Bit Perfect。
 安装理论适配目标时，安装器会显示醒目警告；按任一音量键确认后才会继续。
 
-当前实机验证播放器为 Apple Music、网易云音乐，输出为 USB Audio。Root 支持
-Magisk，或带有效 metamodule 的 KernelSU。
+当前静态白名单包含 Apple Music、网易云音乐、QQ 音乐和 Spotify。Apple Music、
+网易云音乐已经完成实机验证；QQ 音乐和 Spotify 已启用，仍需完成受控实机播放
+矩阵。输出为 USB Audio。Root 支持 Magisk，或带有效 metamodule 的 KernelSU。
 
 扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。其他 Qualcomm Android 17
 AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一代码签名、对象布局
@@ -42,10 +43,9 @@ AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一�
 
 输出目标：采样率跟随。严格 Bit Perfect 不在本项目保证范围内。
 
-同一 Android 大版本内升级 system、vendor、odm 或 product 后，模块保持启用。
-下次覆盖安装时，安装器会提示固件发生变化并重新执行全部结构检查。跨 Android
-大版本或设备/HAL 目标发生变化时会中止安装。模块升级优先使用 Magisk 分区镜像；
-KernelSU 使用当前模块 payload 作为升级基线，不在模块中保存整套 stock SO。
+私有 alpha 阶段不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；
+安装器检测到同 ID 的活动或残留模块目录时会直接中止，只允许从未修改的实时
+系统视图开始打补丁。模块中不保存整套 stock SO。
 
 ### 已验证基线
 
@@ -173,8 +173,10 @@ bit-perfect output.
 For a theoretical target, the installer shows a prominent warning and waits
 for either volume key before continuing.
 
-Hardware testing currently covers Apple Music and NetEase Cloud Music over
-USB Audio. Root support is Magisk or KernelSU with an active metamodule.
+The static allowlist contains Apple Music, NetEase Cloud Music, QQ Music and
+Spotify. Hardware testing currently covers Apple Music and NetEase Cloud Music
+over USB Audio; QQ Music and Spotify are enabled pending the controlled player
+matrix. Root support is Magisk or KernelSU with an active metamodule.
 
 Speaker, Bluetooth, analogue and mixed routes are left untouched. Other
 Qualcomm Android 17 AIDL audio baselines receive an unverified warning and may
@@ -197,12 +199,11 @@ hashes are diagnostic only.
 Output target: sample-rate following. Strict bit-perfect output is outside the
 project's guarantee.
 
-A system, vendor, ODM or product update within the same Android major version
-does not disable the module. The next in-place module installation warns that
-the firmware changed and repeats every structural check. A different Android
-major version or device/HAL target is blocked. Module updates prefer Magisk's
-partition mirror; KernelSU uses the active module payload as its upgrade base.
-Full stock libraries are not duplicated inside the module.
+In-place module upgrades are intentionally unsupported during the private
+alpha phase. Delete the installed module and reboot before installing another
+build. The installer rejects any active or residual module directory and
+patches only the unmodified live system view. Full stock libraries are not
+duplicated inside the module.
 
 ### Verified baseline
 

@@ -160,6 +160,12 @@ The v0.7.0 entry hook compares the profile first:
 - every other profile replays the displaced `paciasp` and continues through
   Xiaomi's original body.
 
+The v0.8.0 package matcher replaces the duplicated UTF-16/ASCII literals with
+one generated ASCII table. UTF-16 `String16` input is widened and compared
+exactly against the same table used by `isAppAllowed()`. The static table now
+contains Apple Music, NetEase Cloud Music, QQ Music and Spotify without
+changing the 788-byte Android 17 payload envelope.
+
 This avoids the older full-function replacement that accidentally changed
 Deep Buffer and VoIP application policy too.
 

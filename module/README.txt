@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.7.9-alpha
+Xiaomi USB DAC Rate Follower v0.8.2-alpha
 
 Experimental module verified on Xiaomi 17 Ultra Android 17 firmware
 OS4.0.0.15.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
@@ -7,6 +7,11 @@ when all semantic ELF and layout checks match, and are reported as unverified.
 Supported players:
 - com.apple.android.music
 - com.netease.cloudmusic
+- com.tencent.qqmusic
+- com.spotify.music
+
+Hardware validation currently covers Apple Music and NetEase Cloud Music.
+QQ Music and Spotify are enabled pending controlled device validation.
 
 Supported output:
 - USB Audio only
@@ -30,10 +35,9 @@ the installed ELF at runtime. Recorded research offsets are not write gates.
 The bundled Android 16 use cases are offline-validated and installable after
 the user acknowledges the missing hardware validation with a volume key.
 
-An OTA within the same Android major version keeps the module enabled. The
-next module installation warns about the firmware change and repeats all
-structural checks. Cross-version or cross-target upgrades abort. Updates use
-Magisk's stock mirror or the active KernelSU module payload; full stock
+In-place upgrades are intentionally unsupported during the private alpha
+phase. Delete the installed module and reboot before installing another build.
+The installer accepts only the unmodified live system view; full stock
 libraries are not stored in this module.
 
 Output target: sample-rate following. Strict Bit Perfect is outside the

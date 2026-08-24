@@ -6,6 +6,8 @@
 . "$TARGET_DIR/usecases/usb-441-rate-table.conf"
 . "$TARGET_DIR/usecases/qti-hifi-reconfigure.conf"
 . "$TARGET_DIR/usecases/pudding-sampling-rate-handler.conf"
+. "$MODPATH/patches/a16_native_hifi_route.relocations.conf" \
+    || abort "! Missing Android 16 native HIFI relocation manifest"
 . "$MODPATH/lib/elf-runtime.sh"
 
 apply_target_patches() {
@@ -54,8 +56,8 @@ apply_target_patches() {
 
     $ELFPATCHER inject "$POLICY_DEST" "$CAVE_BASE" \
         "$MODPATH/patches/a16_native_hifi_route.template.bin" \
-        "12:BL:$VENDOR_SELECT" \
-        "252:B:$(offset_add "$SELECT_SITE" 4)" \
+        "${A16_NATIVE_HIFI_VENDOR_SELECT_OUTPUT_STUB}:$VENDOR_SELECT" \
+        "${A16_NATIVE_HIFI_SELECT_OUTPUT_RETURN}:$(offset_add "$SELECT_SITE" 4)" \
         || abort "! Android 16 native HIFI route injection failed"
     $ELFPATCHER inject "$POLICY_DEST" "$DEFAULT_CAVE" \
         "$MODPATH/patches/a16_hifi_dynamic_default.template.bin" \

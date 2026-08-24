@@ -1,6 +1,6 @@
 # Controlled test plan
 
-`0.7.6-alpha` must pass offline verification before any device installation.
+`0.8.2-alpha` must pass offline verification before any device installation.
 Do not live-replace audio libraries or restart audioserver manually.
 
 ## Offline gate
@@ -26,7 +26,7 @@ python3 tests/verify_firmware_patch.py \
   libaudiocorehal.qti.so \
   libaudiopolicycomponents.so \
   libaudiopolicymanagerimpl.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.7.6-alpha.zip
+  dist/xiaomi-usb-dac-rate-follower-v0.8.2-alpha.zip
 ```
 
 ## Installation gate
@@ -36,8 +36,8 @@ Install only if:
 - fingerprint exactly matches the installer;
 - KernelSU has an active metamodule, or Magisk systemless mounting is known to
   work;
-- the previous module is disabled/removed and the phone has rebooted back to
-  stock libraries;
+- the previous module has been deleted and the phone has rebooted back to
+  stock libraries; disabling it alone is not an installation-ready state;
 - a recovery path is available;
 - the battery is sufficiently charged.
 
@@ -83,6 +83,13 @@ For every boundary, capture all four observations:
 4. HAL `sampling_rate` line and DAC display.
 
 Passing only the DAC display is insufficient.
+
+## Newly enabled player matrix
+
+QQ Music (`com.tencent.qqmusic`) and Spotify (`com.spotify.music`) are enabled
+but remain pending hardware validation. Before promoting either player, run the
+same primary matrix and confirm that the player requests the source rate rather
+than a fixed 48 kHz track. A whitelist hit alone is not a pass.
 
 ## Stress and lifecycle matrix
 

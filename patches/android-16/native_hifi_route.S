@@ -17,13 +17,13 @@ a16_native_hifi_select_hook:
     cbz     x4, .Ldone
     ldr     x0, [x2]
     cbz     x0, .Ldone
-    adr     x1, .Lapple_utf16
-    bl      .Lutf16_equal
+    adr     x1, .Lpackage_table
+    bl      .Lutf16_in_package_table
     cbnz    w0, .Lallowed
-    ldr     x0, [x2]
-    adr     x1, .Lnetease_utf16
-    bl      .Lutf16_equal
-    cbz     w0, .Ldone
+    b       .Ldone
+    // Preserve the established +0x48 route-body layout and external return
+    // relocation while replacing two inline comparisons with a table scan.
+    .space  12
 
 .Lallowed:
     ldr     x11, [x3, #0x10]
@@ -83,14 +83,27 @@ a16_native_hifi_select_hook:
     add     sp, sp, #0x20
     b       SELECT_OUTPUT_RETURN
 
-.Lutf16_equal:
-    ldrh    w6, [x0], #2
-    ldrh    w7, [x1], #2
-    cmp     w6, w7
-    b.ne    .Lnot_equal
-    cbnz    w6, .Lutf16_equal
+.Lutf16_in_package_table:
+    mov     x5, x0
+.Lutf16_candidate:
+    ldrb    w8, [x1]
+    cbz     w8, .Lnot_equal
+    mov     x0, x5
+.Lutf16_candidate_compare:
+    ldrh    w7, [x0], #2
+    ldrb    w8, [x1], #1
+    cmp     w7, w8
+    b.ne    .Lutf16_candidate_mismatch
+    cbnz    w7, .Lutf16_candidate_compare
     mov     w0, #1
     ret
+.Lutf16_candidate_mismatch:
+    cbz     w8, .Lutf16_candidate_next
+.Lutf16_candidate_skip:
+    ldrb    w8, [x1], #1
+    cbnz    w8, .Lutf16_candidate_skip
+.Lutf16_candidate_next:
+    b       .Lutf16_candidate
 
 .Lascii_equal:
     ldrb    w2, [x0], #1
@@ -133,11 +146,9 @@ a16_native_hifi_select_hook:
     ret
 
 .p2align 1
-.Lapple_utf16:
-    .hword  'c','o','m','.','a','p','p','l','e','.','a','n','d','r','o','i','d','.','m','u','s','i','c',0
-.Lnetease_utf16:
-    .hword  'c','o','m','.','n','e','t','e','a','s','e','.','c','l','o','u','d','m','u','s','i','c',0
 .Lhifi_name:
     .asciz  "hifi_playback"
+.Lpackage_table:
+    .include "player_packages.inc"
 .p2align 2
     .space  640 - (. - a16_native_hifi_select_hook)

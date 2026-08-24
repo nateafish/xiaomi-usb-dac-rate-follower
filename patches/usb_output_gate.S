@@ -19,8 +19,8 @@
 usb_output_gate_branch:
     b       usb_output_gate
 
-// Keep the historical 140-byte cave as a deterministic trampoline so an
-// installed v0.7.6 image can be recognized and upgraded in place.
+// Keep the 140-byte cave as a deterministic trampoline so the existing cave
+// layout and the following independently validated payload remain stable.
 .section .usb_output_gate_cave, "ax"
 .p2align 2
 .global usb_output_gate

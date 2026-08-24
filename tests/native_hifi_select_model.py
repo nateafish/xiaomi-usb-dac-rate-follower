@@ -2,10 +2,16 @@
 """Behavioral model for the native selectOutput HIFI override."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 USB = frozenset({0x2000, 0x4000, 0x04000000})
-ALLOWED = frozenset({"com.apple.android.music", "com.netease.cloudmusic"})
+MANIFEST = Path(__file__).resolve().parents[1] / "config" / "player-packages.tsv"
+ALLOWED = frozenset(
+    line.split("\t", 1)[0]
+    for line in MANIFEST.read_text().splitlines()
+    if line and not line.startswith("#")
+)
 
 
 @dataclass(frozen=True)
@@ -51,8 +57,13 @@ def main() -> None:
 
     assert select("com.netease.cloudmusic", 21, [deep_usb, hifi_usb]) == 117
     assert select("com.apple.android.music", 21, [deep_usb, hifi_usb]) == 117
+    assert select("com.tencent.qqmusic", 21, [deep_usb, hifi_usb]) == 117
+    assert select("com.spotify.music", 21, [deep_usb, hifi_usb]) == 117
     assert select("com.netease.cloudmusic", 117, [deep_usb, hifi_usb]) == 117
     assert select("com.example.player", 21, [deep_usb, hifi_usb]) == 21
+    assert select("com.spotify.music.beta", 21, [deep_usb, hifi_usb]) == 21
+    assert select("com.spotify", 21, [deep_usb, hifi_usb]) == 21
+    assert select("COM.SPOTIFY.MUSIC", 21, [deep_usb, hifi_usb]) == 21
     assert select("com.netease.cloudmusic", 21, [deep_bt, hifi_usb]) == 21
     assert select("com.netease.cloudmusic", 21, [deep_speaker, hifi_usb]) == 21
     assert select("com.netease.cloudmusic", 21, [deep_mixed, hifi_usb]) == 21
@@ -69,7 +80,7 @@ def main() -> None:
     assert latest_max_rate([1], [44_100, 384_000]) == 384_000
     assert latest_max_rate([1], [44_100, 96_000]) == 96_000
 
-    print("native HIFI selection and idle model: 16 cases passed")
+    print("native HIFI selection and idle model: exact allowlist cases passed")
 
 
 if __name__ == "__main__":
