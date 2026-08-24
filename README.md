@@ -80,14 +80,45 @@ AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写
 
 ### 适配其他设备
 
-请不要直接安装现有 ZIP。先在设备连接并获得 root 后，在仓库根目录运行：
+采集脚本把“全新适配”和“安装后排错”严格分开。两种压缩包不能互相替代。
+
+#### 全新适配（尚未安装本模块）
+
+请不要直接安装现有 ZIP。设备必须处于未安装本模块的原厂视图；如果以前安装过，
+请完整卸载并重启。连接设备并获得 root 后，在仓库根目录运行：
 
 ```sh
-bash scripts/collect_device_port.sh
+bash scripts/collect_device_port.sh port --capture-transitions
 ```
 
-脚本只读采集并生成 `xiaomi-usb-dac-port-*.tar.gz`。检查并删除个人信息
-后，将压缩包附在 Issue 中。也可以手工提供以下内容。
+`port` 会拒绝已安装或待更新的本模块，采集原厂 ELF、配置、服务映射和运行状态。
+`--capture-transitions` 会引导测试 44.1、48、88.2、96、176.4、192、384 kHz，
+再回到 44.1 kHz、停止播放并重新连接 DAC，同时为每一步保存 AudioPolicy、
+AudioFlinger 和 ALSA 快照。如果暂时无法做动态测试，也可以只采集静态基线：
+
+```sh
+bash scripts/collect_device_port.sh port
+```
+
+#### 已安装后提交问题
+
+如果设备已经安装本模块，需要报告不跟随、无声、卡顿、音频服务崩溃或其他异常，
+请保留故障现场并运行：
+
+```sh
+bash scripts/collect_device_port.sh issue --capture-transitions
+```
+
+无法完成切换流程时运行 `bash scripts/collect_device_port.sh issue`。`issue` 模式
+会采集已安装模块的版本、状态、覆盖文件、当前生效的目标库、音频状态及崩溃线索；
+它不是原厂基线，不能用于全新适配。
+
+两种模式都只读访问设备，不清空日志，不导出分区镜像、APK、音乐或应用私有目录。
+默认只保留一个 `xiaomi-usb-dac-{port,issue}-*.tar.gz`，不会同时保留同体积的
+解压目录。多设备连接时使用 `--serial SERIAL`；确实需要查看目录时使用
+`--keep-directory`，只要目录而不要压缩包时使用 `--no-archive`。上传前请查看
+压缩包内的 `PRIVACY-REVIEW.txt` 和 `state/collection-warnings.txt`，删除不希望
+公开的信息。以下内容是全新适配所需材料，也可以手工提供。
 
 #### 必需的系统信息
 
@@ -145,8 +176,9 @@ bash scripts/collect_device_port.sh
 
 #### 必需的动态日志
 
-请清理日志后，在 DAC 已连接时依次测试 44.1、48、96、44.1 kHz，完全停止
-播放，再拔插 DAC。日志要覆盖每个切换前后至少数秒，并同时记录 DAC 数显。
+推荐使用 `port --capture-transitions`，在 DAC 已连接时依次测试 44.1、48、
+88.2、96、176.4、192、384 kHz，再回到 44.1 kHz，完全停止播放并拔插 DAC。
+日志要覆盖每个切换前后至少数秒，并同时记录 DAC 数显。
 至少包含 `AudioPolicy`、`AudioFlinger`、AIDL/HIDL HAL、PAL/AGM、ALSA、USB
 和采样率关键字。不要上传 APK、歌曲文件或与音频问题无关的完整 logcat。
 
@@ -267,14 +299,32 @@ certifies runtime stability or strict bit-perfect output.
 
 ### Porting requests
 
-Do not install an existing ZIP on an unlisted device. With adb and root
-available, run `bash scripts/collect_device_port.sh` from the repository root.
-It creates a read-only `xiaomi-usb-dac-port-*.tar.gz` containing device
-metadata, relevant ELF files, AIDL/HIDL discovery data, active configuration,
-audio state, ALSA/USB state, and filtered recent logcat. Review and remove
-personal information before attaching it to an Issue.
+The collector has two non-interchangeable modes.
 
-The archive must include the stock versions of the libraries at their original
+For a new-device port, do not install an existing ZIP. Completely uninstall
+any previous copy of this module, reboot into the unmodified system view, then
+run `bash scripts/collect_device_port.sh port --capture-transitions` with adb
+and root available. Use `port` without the transition option only when the
+interactive playback sequence is not currently possible. Port mode refuses an
+installed or pending copy of this module.
+
+For a problem after installation, preserve the failure state and run
+`bash scripts/collect_device_port.sh issue --capture-transitions`, or `issue`
+without that option when playback cannot be tested. Issue mode includes the
+installed module metadata and overlay payload, live target libraries, current
+audio state, and crash evidence. It is not a stock baseline and cannot be used
+for a new-device port.
+
+Both modes are read-only on the device and do not clear logs or copy partition
+images, APKs, music, or app-private data. By default the script retains only
+one `xiaomi-usb-dac-{port,issue}-*.tar.gz`, not a duplicate unpacked directory.
+Use `--serial SERIAL` for multiple devices, `--keep-directory` when an unpacked
+copy is explicitly needed, or `--no-archive` for a directory only. Review
+`PRIVACY-REVIEW.txt` and `state/collection-warnings.txt` before attaching the
+archive to an Issue.
+
+The following requirements apply to a new-device port archive. It must include
+the stock versions of the libraries at their original
 paths. The current patch targets are `libaudiopolicymanagerdefault.so`,
 `libaudioflinger.so`, the active USB/PAL implementation, and the Qualcomm Audio HAL. The policy
 components and Xiaomi policy implementation libraries are required for layout
@@ -285,7 +335,8 @@ binaries, and the audio-related libraries shown in the service process maps.
 
 Include active audio policy/module XML, policy-engine XML, VINTF manifests,
 audio init RC files, AudioPolicy and AudioFlinger dumps, ALSA and USB state,
-and logs covering 44.1 -> 48 -> 96 -> 44.1 kHz, stop, and DAC reconnect. State
+and logs covering 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz, return to
+44.1 kHz, stop, and DAC reconnect. State
 the DAC model, displayed rate, PCM format, effects/Dolby status, and observed
 result. Do not upload APKs, music, or unrelated full logcat. Every new baseline
 still requires complete semantic and layout validation before it is verified.

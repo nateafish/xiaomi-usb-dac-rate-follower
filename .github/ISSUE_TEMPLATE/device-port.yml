@@ -8,8 +8,9 @@ body:
     attributes:
       value: |
         An unlisted device may match a compatible Qualcomm baseline, but it is
-        not a verified target. Remove unrelated personal log lines, and do not
-        upload paid app APKs or music files.
+        not a verified target. Completely uninstall this module and reboot
+        before collecting the stock baseline. Remove unrelated personal log
+        lines, and do not upload paid app APKs or music files.
   - type: input
     id: device
     attributes:
@@ -36,8 +37,9 @@ body:
     attributes:
       label: Diagnostic archive link
       description: |
-        Run scripts/collect_device_port.sh with adb + root, review the output,
-        remove personal information, and attach the resulting archive. It
+        Run `bash scripts/collect_device_port.sh port --capture-transitions`
+        with adb + root, review the output, remove personal information, and
+        attach the resulting `xiaomi-usb-dac-port-*.tar.gz`. It
         should contain the stock ELF files at their original paths, active
         policy/XML/VINTF/init files, AIDL/HIDL discovery, service process maps,
         AudioPolicy/AudioFlinger/ALSA/USB state, and filtered logs. For HIDL,
@@ -63,8 +65,10 @@ body:
       label: Transition test results
       description: |-
         With one USB DAC connected, report the DAC display and app result for
-        44.1 -> 48 -> 96 -> 44.1 kHz, PCM16/24/32 or Float if tested, stop,
-        and reconnect. Include whether another app or Bluetooth was active.
+        Report 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz, then return to
+        44.1 kHz, stop, and reconnect. Include PCM16/24/32 or Float when known,
+        and whether another app or Bluetooth was active. Mark an unsupported
+        source rate as not tested instead of substituting an upsampled file.
     validations:
       required: true
   - type: checkboxes

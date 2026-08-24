@@ -1,0 +1,71 @@
+name: Installed module problem
+description: Report incorrect rates, silence, instability, or a crash after installation.
+title: "[Issue] <device> <firmware> <module version>"
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Preserve the failure state. Do not use the new-device `port` collector:
+        an installed-module archive has different evidence. Remove unrelated
+        personal log lines, and do not upload app APKs or music files.
+  - type: input
+    id: device
+    attributes:
+      label: Device and firmware
+      description: Include the model, product device, Android version, and complete firmware version.
+    validations:
+      required: true
+  - type: input
+    id: module
+    attributes:
+      label: Module ZIP and root solution
+      description: Include the exact module version or ZIP name and the Magisk/KernelSU version.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and observed result
+      description: State the player, track PCM format, USB connection, exact steps, expected result, actual result, and whether it repeats after reboot.
+    validations:
+      required: true
+  - type: input
+    id: dac
+    attributes:
+      label: USB DAC and displayed rate
+      description: Include the DAC model and every source-rate to displayed-rate result you could test.
+    validations:
+      required: true
+  - type: textarea
+    id: archive
+    attributes:
+      label: Installed-module diagnostic archive
+      description: |
+        Run `bash scripts/collect_device_port.sh issue --capture-transitions`
+        with adb + root. If playback or switching is impossible, run the same
+        command without `--capture-transitions`. Review and attach the resulting
+        `xiaomi-usb-dac-issue-*.tar.gz`; do not attach a `port` archive instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: recovery
+    attributes:
+      label: Result after disabling or uninstalling the module
+      options:
+        - Not tested
+        - Problem disappears
+        - Problem remains
+        - Device cannot reach a state where this can be tested
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I reviewed PRIVACY-REVIEW.txt and collection-warnings.txt before upload.
+          required: true
+        - label: I did not attach copyrighted app or music content.
+          required: true
