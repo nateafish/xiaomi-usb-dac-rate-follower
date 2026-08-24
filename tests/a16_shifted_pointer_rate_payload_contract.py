@@ -32,13 +32,13 @@ def main() -> None:
     assert word(payload, 0x44) == 0x5280008B
     assert word(payload, 0x60) == 0x7946F2AA  # usecase +0x378
     assert word(payload, 0x6C) == 0xF943C6AB  # AudioPortConfig* +0x788
-    assert word(payload, 0x88) == 0xB9000969
-    assert word(payload, 0x90) == 0x3900316C
+    assert word(payload, 0x88) == 0x9100216B
+    assert word(payload, 0x94) == 0xC89FFD69
 
     expected = {
         "STR_PARMS_GET_STR": (16, "BL"),
         "ATOI": (28, "BL"),
-        "PUDDING_RATE_RETURN": (152, "B"),
+        "PUDDING_RATE_RETURN": (156, "B"),
     }
     for symbol, (offset, kind) in expected.items():
         pattern = rf"^A16_SHIFTED_POINTER_RATE_{symbol}='{offset}:{kind}'$"
@@ -48,6 +48,9 @@ def main() -> None:
     assert word(worker, 0x08) == 0xF9000BE4
     assert word(worker, 0x0C) == 0x7946F2E8  # usecase +0x378, this=x23
     assert word(worker, 0x18) == 0xF943C6EA  # config +0x788
+    assert word(worker, 0x20) == 0x9100214A
+    assert word(worker, 0x24) == 0xC8DFFD4C
+    assert word(worker, 0x28) & 0xFFF8001F == 0xB600000C
     assert word(worker, 0x2C) == 0xF9440AEB  # cache +0x810
     assert word(worker, 0x40) == 0xF941E6EA  # PAL handle +0x3c8
     assert word(worker, 0x4C) == 0xAA1703E0  # standby(this=x23)

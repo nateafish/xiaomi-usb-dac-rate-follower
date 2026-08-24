@@ -41,15 +41,16 @@ def main() -> None:
     # must not inspect the PAL handle, modify the cached PAL attribute, or call
     # standby while transfer() can be in pal_stream_write().
     assert word(payload, 0x6C) == 0xF943B2AB  # config +0x760 -> x11
-    assert word(payload, 0x88) == 0xB9000969  # value first
-    assert word(payload, 0x90) == 0x3900316C  # presence second
-    assert 0xF941D2AC not in [word(payload, i) for i in range(0, 0x9C, 4)]
-    assert 0xB9004149 not in [word(payload, i) for i in range(0, 0x9C, 4)]
+    # Rate and optional-presence are one aligned 64-bit release publication.
+    assert word(payload, 0x88) == 0x9100216B  # add x11, x11, #8
+    assert word(payload, 0x94) == 0xC89FFD69  # stlr x9, [x11]
+    assert 0xF941D2AC not in [word(payload, i) for i in range(0, 0xA0, 4)]
+    assert 0xB9004149 not in [word(payload, i) for i in range(0, 0xA0, 4)]
 
     expected = {
         "STR_PARMS_GET_STR": (16, "BL"),
         "ATOI": (28, "BL"),
-        "PUDDING_RATE_RETURN": (152, "B"),
+        "PUDDING_RATE_RETURN": (156, "B"),
     }
     for symbol, (offset, kind) in expected.items():
         pattern = rf"^A16_POINTER_RATE_{symbol}='{offset}:{kind}'$"
@@ -62,6 +63,9 @@ def main() -> None:
     assert word(worker, 0x08) == 0xF9000BE4  # str x4, [sp, #0x10]
     assert word(worker, 0x0C) == 0x7946A2A8  # usecase +0x350
     assert word(worker, 0x18) == 0xF943B2AA  # config +0x760
+    assert word(worker, 0x20) == 0x9100214A  # optional-rate slot +8
+    assert word(worker, 0x24) == 0xC8DFFD4C  # ldar x12, [x10]
+    assert word(worker, 0x28) & 0xFFF8001F == 0xB600000C  # tbz x12, #32
     assert word(worker, 0x2C) == 0xF943F6AB  # cache +0x7e8
     assert word(worker, 0x40) == 0xF941D2AA  # PAL handle +0x3a0
     assert word(worker, 0x64) == 0xB900416C  # cached rate +0x40

@@ -65,9 +65,12 @@ a16_dada_rate_parameter:
     cmp     w11, w9
     b.eq    .Lparameter_resume
 .Lstore_rate:
-    str     w9, [x10, #0x8]
-    mov     w11, #1
-    strb    w11, [x10, #0xc]
+    // Publish AudioPortConfig's value and presence discriminator together.
+    // The writer hook acquires this aligned eight-byte optional-rate slot.
+    add     x10, x10, #0x8
+    mov     x11, #0x100000000
+    orr     x9, x9, x11
+    stlr    x9, [x10]
 
 .Lparameter_resume:
     ldp     x1, x2, [sp]
@@ -100,9 +103,9 @@ a16_dada_rate_worker:
 
     ldr     x10, [x23, #0x4c0]
     cbz     x10, .Lworker_resume
-    ldrb    w8, [x10, #0xc]
-    cbz     w8, .Lworker_resume
-    ldr     w12, [x10, #0x8]
+    add     x10, x10, #0x8
+    ldar    x12, [x10]
+    tbz     x12, #32, .Lworker_resume
 
     ldr     x11, [x23, #0x540]
     cbz     x11, .Lworker_resume

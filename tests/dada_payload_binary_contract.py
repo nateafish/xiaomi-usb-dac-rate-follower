@@ -37,6 +37,10 @@ def main() -> None:
         bytes.fromhex("e90340f9ff430091e8031f2a"),
         "Dada worker resume sequence",
     )
+    # Binder -> writer handoff is one aligned optional-rate word using a
+    # release store and acquire load, never two independent plain accesses.
+    require_once(parameter, bytes.fromhex("49fd9fc8"), "Dada release publication")
+    require_once(worker, bytes.fromhex("4cfddfc8"), "Dada acquire consumption")
     print("Dada payload binary contract: PASS")
 
 

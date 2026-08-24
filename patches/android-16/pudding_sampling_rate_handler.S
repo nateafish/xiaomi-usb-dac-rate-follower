@@ -73,12 +73,14 @@ a16_pudding_sampling_rate_handler:
     b.eq    .Lresume
 
 .Lpublish:
-    // Publish the value before its presence discriminator.  The transfer
-    // worker below consumes this request and owns the complete standby /
-    // cached-attribute / configure handoff.
-    str     w9, [x11, #0x8]
-    mov     w12, #1
-    strb    w12, [x11, #0xc]
+    // AudioPortConfig's optional sample rate occupies one aligned eight-byte
+    // slot: the 32-bit value at +0x8 and its presence discriminator at +0xc.
+    // Publish the complete slot with release semantics so the Binder thread
+    // can never expose a new discriminator with a stale or torn rate.
+    add     x11, x11, #0x8
+    mov     x12, #0x100000000
+    orr     x9, x9, x12
+    stlr    x9, [x11]
 
 .Lresume:
     mov     x0, x23
@@ -122,9 +124,11 @@ a16_pointer_rate_worker:
     ldr     x10, [x23, #A16_POINTER_CONFIG_OFFSET]
 #endif
     cbz     x10, .Lworker_resume
-    ldrb    w8, [x10, #0xc]
-    tbz     w8, #0, .Lworker_resume
-    ldr     w12, [x10, #0x8]
+    // Acquire the value and discriminator as the same atomic mailbox word.
+    // w12 remains the low 32-bit requested rate after the presence test.
+    add     x10, x10, #0x8
+    ldar    x12, [x10]
+    tbz     x12, #32, .Lworker_resume
 
 #if A16_POINTER_LAYOUT_SHIFT == 0
     ldr     x11, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]

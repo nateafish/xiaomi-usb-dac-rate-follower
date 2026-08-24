@@ -92,6 +92,13 @@ unknown instruction states.
 
 ## Why Android 16 uses writer-thread handoff
 
+AOSP's AIDL reference defines `DriverInterface::standby()` and
+`DriverInterface::transfer()` as worker-thread-only operations, and the output
+worker calls `transfer()` directly while handling a burst command. A normal
+standby command reaches the same driver method from that same worker loop.
+The Case-3 hook therefore keeps driver teardown in its intended execution
+context; it does not create a second PAL owner on a Binder thread.
+
 Android 16 Pudding/Byron and the shifted Myron layout have no equivalent
 usecase-3 transfer lock. Their base transfer reads the PAL handle and calls
 `pal_stream_write()` without holding the configure mutex. Taking the configure
@@ -108,9 +115,13 @@ already live.
 The Android 16 pointer-layout handler therefore splits ownership:
 
 - the Binder parameter hook validates the seven allowed rates and enum 3, then
-  publishes only the optional `AudioPortConfig` request;
+  publishes only the optional `AudioPortConfig` request. Its 32-bit value and
+  presence discriminator are packed into the ABI's aligned eight-byte slot
+  and published atomically with release semantics;
 - a hook at the head of `MiStreamOutPrimary::transfer()` checks requested
-  versus cached PAL rate before either normal transfer or `hyperWrite()`;
+  versus cached PAL rate before either normal transfer or `hyperWrite()`. It
+  acquires the same eight-byte slot, so it cannot observe a half-published
+  Binder update;
 - the writer thread invokes the concrete stock standby when a handle is live,
   so no other transfer invocation can simultaneously be inside its own PAL
   write for that stream;
