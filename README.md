@@ -14,7 +14,7 @@
 | Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **实机验证** | 可安装 | 原生 HIFI 修复 |
 | Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | 原生 HIFI 移植 |
 | Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
-| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | Android 16 AIDL HAL 移植 |
+| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
 | Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
 | Xiaomi 15 | `dada` | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v2 / PAL 工作线程移植 |
 
@@ -42,25 +42,20 @@ AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一�
 - 使用 Xiaomi 原生 `HifiSampleRateManager` 处理播放状态和采样率切换
 - 为 Qualcomm USB 音频路径补充 44.1 kHz 能力
 - 同步 AudioFlinger、AIDL HAL、PAL 和 USB 输出采样率
-- 修正 HIFI 输出的初始 PCM32/48 kHz 配置
+- 设置 HIFI 输出的初始值为 PCM32/48 kHz
 - 最后一个 HIFI 音轨停止时，空闲 DAC 保持最后采样率直到 standby
 - 普通 USB 输出已活动时，按实际接管状态恢复 48 kHz
 - 无常驻守护进程、轮询、Zygisk 或应用 Hook
 
 ### 限制
 
-输出目标：采样率跟随。严格 Bit Perfect 不在本项目保证范围内。
+输出目标：当前实现基于小米原有残留的 Hifi 输出通道，
+而非安卓 14 后提供的 Bit Perfect 通道。
 
-私有 alpha 阶段不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；
-安装器检测到同 ID 的活动或残留模块目录时会直接中止，只允许从未修改的实时
-系统视图开始打补丁。模块中不保存整套 stock SO。
+Alpha 阶段不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；
+安装器检测到同 ID 的活动或残留模块目录时会直接中止。
 
-### 已验证基线
-
-`v0.7.8-alpha` 已在 iBasso DC-Tonfa 上验证网易云音乐 44.1 kHz
-HIFI 输出：AudioFlinger、PCM32 HAL 和 PAL 均运行于 44.1 kHz。暂停最后一个
-HIFI 音轨后，不会先发送 48 或 384 kHz；线程保持 44.1 kHz 并直接进入
-standby，内部空闲标记不会送入 HAL。
+模块在安装中注入系统 SO 修改，不保存整套 stock SO。
 
 ### 构建
 
@@ -70,7 +65,7 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 
 构建产物位于 `dist/`。
 
-### 目标与智能匹配
+### 适配说明
 
 仓库按 Android 大版本组织目标。`baselines/` 记录设备、SoC、board platform、
 AIDL/HIDL 世代和接口版本，`usecases/` 保存对应的修改方案。安装器先选择候选方案，
@@ -160,28 +155,35 @@ bash scripts/collect_device_port.sh
 ## English
 
 An adaptive USB DAC sample-rate module for the Qualcomm AIDL audio stack used
-by the Xiaomi 17 family. The current hardware-verified target is Xiaomi 17
-Ultra on Android 17. Supported players use the native `hifi_playback` path and
-can follow tracks between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
+by the Xiaomi 17 family.
+
+The current hardware target is Xiaomi 17 Ultra on Android 17. A specified player
+outputs through the system native `hifi_playback` path, and the sample rate can
+follow the track between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 
 ### Compatibility status
 
-| Model | Codename | OS / firmware baseline | Validation | Module status | Adaptation type |
-| --- | --- | --- | --- | --- | --- |
-| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **Hardware verified** | Installable | Native HIFI fix |
-| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)** | Installable with warning | Native HIFI port |
-| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL HAL port |
-| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **Theoretical (offline OTA)** | Installable with warning | Android 16 AIDL HAL port |
-| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL HAL port |
-| Xiaomi 15 | `dada` | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL v2 / PAL worker port |
+| Model             | Codename   | OS / firmware baseline                       | Validation status                  | Module status                 | Adaptation type                  |
+| ----------------- | ---------- | -------------------------------------------- | ---------------------------------- | ----------------------------- | -------------------------------- |
+| Xiaomi 17 Ultra   | `nezha`    | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM`  | **Hardware verified**              | Installable                   | Native HIFI fix                  |
+| Xiaomi 17 Ultra   | `nezha`    | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)**      | Installable with warning      | Native HIFI port                 |
+| Xiaomi 17         | `pudding`  | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
+| Xiaomi 17 Pro     | `pandora`  | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
+| Xiaomi 15         | `dada`     | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v2 / PAL worker migration   |
 
-“Hardware verified” means testing on the device with a USB DAC and real
-players. “Theoretical” means the complete OTA was extracted and passed
-semantic injection, branch relocation and two-pass idempotence checks without
-corresponding hardware. It does not confirm runtime stability or strict
-bit-perfect output.
-For a theoretical target, the installer shows a prominent warning and waits
-for either volume key before continuing.
+“Hardware verified” means that the module has been tested on the actual device,
+USB DAC and real playback applications.
+
+“Theoretical” means that the complete OTA package was extracted from the target
+firmware and passed semantic injection, branch relocation and two-pass
+idempotence validation, but no corresponding physical device test was performed.
+
+Theoretical compatibility does not mean confirmed audio stability or strict
+Bit Perfect output.
+
+When installing a theoretical target, the installer displays a prominent warning.
+Installation continues only after confirmation by pressing either volume key.
 
 Player allowlist:
 
@@ -190,42 +192,51 @@ Player allowlist:
 - QQ Music (`com.tencent.qqmusic`)
 - Spotify (`com.spotify.music`)
 
-Output is USB Audio. Root support is Magisk or KernelSU with an active
-metamodule.
+The output target is USB Audio.
 
-Speaker, Bluetooth, analogue and mixed routes are left untouched. Other
-Qualcomm Android 17 AIDL audio baselines receive an unverified warning and may
-continue only when the ELF architecture, unique code signatures, object
-layouts and executable patch space all match. Fingerprints, Build IDs and
-whole-file hashes remain diagnostic and do not replace the structural gates.
+Root environments:
+- Magisk
+- KernelSU with a valid metamodule
+
+Speaker output, Bluetooth output, analogue headphone output and mixed routes are
+not modified by this module.
+
+Other Qualcomm Android 17 AIDL audio baselines display an unverified warning.
+Continuation is allowed only when ELF architecture, unique code signatures,
+object layouts and executable patch space all match.
+
+Fingerprints, Build IDs and whole-file hashes are used only for diagnostics.
+They do not replace structural validation and do not independently block
+compatible OTA targets.
 
 ### Features
 
-- Uses Xiaomi's native `HifiSampleRateManager`
-- Adds 44.1 kHz support to the Qualcomm USB audio path
-- Keeps AudioFlinger, the AIDL HAL, PAL and USB output synchronized
-- Starts HIFI playback with a coherent PCM32/48 kHz configuration
-- Keeps an idle DAC at the final source rate until HIFI standby
-- Restores 48 kHz when an active ordinary USB output takes ownership
-- No daemon, polling loop, Zygisk code or application hook
+- Uses Xiaomi native `HifiSampleRateManager` to handle playback state and
+  sample-rate switching.
+- Adds 44.1 kHz capability to the Qualcomm USB audio path.
+- Synchronizes AudioFlinger, AIDL HAL, PAL and USB output sample rates.
+- Sets the initial HIFI output state to PCM32/48 kHz.
+- When the final HIFI track stops, an idle DAC keeps the last sample rate until
+  standby.
+- When normal USB output is active, restores 48 kHz according to the actual
+  takeover state.
+- No resident daemon, polling loop, Zygisk component or application hook.
 
 ### Limitations
 
-Output target: sample-rate following. Strict bit-perfect output is outside the
-project's guarantee.
+Output target: the current implementation is based on Xiaomi's remaining native
+HIFI output path, not the Bit Perfect path introduced after Android 14.
 
-In-place module upgrades are intentionally unsupported during the private
-alpha phase. Delete the installed module and reboot before installing another
-build. The installer rejects any active or residual module directory and
-patches only the unmodified live system view. Full stock libraries are not
-duplicated inside the module.
+During the Alpha stage, module overwrite upgrades are not supported.
 
-### Verified baseline
+Before installing another build, the existing module must be removed and the
+device must be rebooted.
 
-`v0.7.8-alpha` was verified with NetEase Cloud Music and an iBasso DC-Tonfa
-at 44.1 kHz. AudioFlinger, the PCM32 HAL and PAL all ran at 44.1 kHz. Pausing
-the final HIFI track entered standby at 44.1 kHz without an intermediate 48 or
-384 kHz update, and the internal idle marker did not reach the HAL.
+If the installer detects an active module with the same ID or a leftover module
+directory, installation is aborted immediately.
+
+The module modifies system SO files during installation and does not store a
+complete set of stock SO libraries.
 
 ### Build
 
