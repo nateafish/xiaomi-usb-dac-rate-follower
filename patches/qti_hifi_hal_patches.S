@@ -9,6 +9,7 @@
 // the correct 1920-frame immutable FMQ.
 
 .extern HIFI_USECASE_SKIP_RECONFIGURE
+.extern HIFI_TRANSFER_SKIP_LOCK
 
 .section .hifi_frame_count_stock, "a"
 .p2align 2
@@ -31,4 +32,17 @@ hifi_usecase_reconfigure_patch:
     mov     w9, #0x2108           // bits 3, 8 and 13
     lsr     w9, w9, w8
     tbz     w9, #0, HIFI_USECASE_SKIP_RECONFIGURE
+    nop
+
+.section .hifi_transfer_lock_patch, "ax"
+.p2align 2
+.global hifi_transfer_lock_patch
+hifi_transfer_lock_patch:
+    // The stock transfer wrapper takes mWriteMutex for usecases 8 and 13,
+    // while setVendorParameters() takes the same mutex before standby.  A
+    // usecase-3 HIFI stream must enter both sides of that protocol; otherwise
+    // pal_stream_write() can race pal_stream_stop()/pal_stream_close().
+    mov     w9, #0x2108           // bits 3, 8 and 13
+    lsr     w9, w9, w8
+    tbz     w9, #0, HIFI_TRANSFER_SKIP_LOCK
     nop

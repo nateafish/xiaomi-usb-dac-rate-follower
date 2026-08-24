@@ -33,17 +33,21 @@ for the default, USB and remote-submix modules.
 The distinct core HAL uniquely resolves the shared Android 16 pointer layout:
 
 - `AudioPortConfig*` and cached PAL-attribute pointers;
-- configure mutex and sample-rate value/discriminator fields;
+- sample-rate value/discriminator fields;
 - Deep Buffer usecase tag and live PAL-handle fields;
-- concrete `MiStreamOutPrimary::standby()` symbol; and
-- the linker-owned 256-byte executable gap and its owner call.
+- the linker-owned 384-byte executable gap and its owner call; and
+- a transfer entry hook that dominates both normal QTI transfer and
+  `hyperWrite()`.
 
-The concrete standby wrapper, base standby, shutdown path and platform-device
-helper were disassembled for this exact Build ID. They do not acquire the
-configure mutex used by the injected handler, and the wrapper returns its
-integer status in `w0`. The transactional handler can therefore close a live
-old-rate stream, abandon a failed standby without publishing new state, and
-commit only the seven supported module rates.
+The wrapper transfer, base transfer, standby and shutdown paths were
+disassembled for this exact Build ID. Unlike Android 17 usecases 8/13, case 3
+has no mutex shared by `setVendorParameters()` and `transfer()`. The injected
+Binder-side handler therefore records only one of the seven supported target
+rates. A separate payload at the head of the writer thread compares that
+request with the cached PAL rate, runs the stock standby lifecycle if a handle
+is live, commits only after success, and then returns to the stock transfer /
+configure path. Active source-rate changes remain adaptive without closing PAL
+concurrently with `pal_stream_write()`.
 
 Resolved Byron offsets are diagnostics only:
 
@@ -52,6 +56,7 @@ Resolved Byron offsets are diagnostics only:
 - MixerThread synchronization: `0x154360`;
 - Qualcomm USB rate table: `0x7150`;
 - HAL rate hook: `0x1cc638`;
+- HAL transfer-worker hook: `0x1cae6c`;
 - HAL executable cave: `0x11f1d4`.
 
 Installation re-resolves every signature, symbol, object-layout anchor, branch

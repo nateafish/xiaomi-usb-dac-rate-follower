@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.8.4-alpha
+Xiaomi USB DAC Rate Follower v0.8.5-alpha
 
 Experimental module verified on Xiaomi 17 Ultra Android 17 firmware
 OS4.0.0.15.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only

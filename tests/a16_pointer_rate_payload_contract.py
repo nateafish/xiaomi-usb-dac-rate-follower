@@ -14,12 +14,17 @@ def word(blob: bytes, offset: int) -> int:
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        raise SystemExit(f"usage: {sys.argv[0]} PAYLOAD RELOCATION_MANIFEST")
+    if len(sys.argv) != 5:
+        raise SystemExit(
+            f"usage: {sys.argv[0]} PARAMETER PARAMETER_RELOCS WORKER WORKER_RELOCS"
+        )
 
     payload = Path(sys.argv[1]).read_bytes()
     manifest = Path(sys.argv[2]).read_text(encoding="utf-8")
+    worker = Path(sys.argv[3]).read_bytes()
+    worker_manifest = Path(sys.argv[4]).read_text(encoding="utf-8")
     assert len(payload) == 256
+    assert len(worker) == 128
 
     # Exactly three 44.1-kHz-family iterations (44.1/88.2/176.4), then four
     # 48-kHz-family iterations.  This rejects 352.8 kHz consistently with the
@@ -32,27 +37,43 @@ def main() -> None:
     assert word(payload, 0x64) == 0x71000D5F  # cmp w10, #3
     assert word(payload, 0x68) & 0xFF00001F == 0x54000001  # b.ne
 
-    # Calls use an aligned private frame; a failed standby reaches the stock
-    # return without publishing a new rate.  Commit order is value, presence,
-    # then cached PAL attribute.
-    assert word(payload, 0x90) == 0xD10043FF  # sub sp, sp, #16
-    assert word(payload, 0xBC) == 0x910043FF  # add sp, sp, #16
-    assert word(payload, 0xC0) & 0x7F000000 == 0x35000000  # cbnz
-    assert word(payload, 0xD4) == 0xB9000969  # str w9, [x11, #8]
-    assert word(payload, 0xDC) == 0x3900316C  # strb w12, [x11, #0xc]
-    assert word(payload, 0xE0) == 0xB9004149  # str w9, [x10, #0x40]
+    # The Binder parameter hook may publish only AudioPortConfig intent.  It
+    # must not inspect the PAL handle, modify the cached PAL attribute, or call
+    # standby while transfer() can be in pal_stream_write().
+    assert word(payload, 0x6C) == 0xF943B2AB  # config +0x760 -> x11
+    assert word(payload, 0x88) == 0xB9000969  # value first
+    assert word(payload, 0x90) == 0x3900316C  # presence second
+    assert 0xF941D2AC not in [word(payload, i) for i in range(0, 0x9C, 4)]
+    assert 0xB9004149 not in [word(payload, i) for i in range(0, 0x9C, 4)]
 
     expected = {
         "STR_PARMS_GET_STR": (16, "BL"),
         "ATOI": (28, "BL"),
-        "MUTEX_LOCK": (156, "BL"),
-        "PUDDING_STANDBY": (164, "BL"),
-        "MUTEX_UNLOCK": (176, "BL"),
-        "PUDDING_RATE_RETURN": (232, "B"),
+        "PUDDING_RATE_RETURN": (152, "B"),
     }
     for symbol, (offset, kind) in expected.items():
         pattern = rf"^A16_POINTER_RATE_{symbol}='{offset}:{kind}'$"
         assert re.search(pattern, manifest, re.MULTILINE), symbol
+
+    # transfer() owns live reconfiguration.  It preserves x9/x3/x4, checks
+    # case 3, compares requested versus cached rate, calls standby only for a
+    # live PAL handle, and commits the cache after successful teardown.
+    assert word(worker, 0x04) == 0xA9000FE9  # stp x9, x3, [sp]
+    assert word(worker, 0x08) == 0xF9000BE4  # str x4, [sp, #0x10]
+    assert word(worker, 0x0C) == 0x7946A2A8  # usecase +0x350
+    assert word(worker, 0x18) == 0xF943B2AA  # config +0x760
+    assert word(worker, 0x2C) == 0xF943F6AB  # cache +0x7e8
+    assert word(worker, 0x40) == 0xF941D2AA  # PAL handle +0x3a0
+    assert word(worker, 0x64) == 0xB900416C  # cached rate +0x40
+    assert word(worker, 0x74) == 0x39400128  # displaced ldrb w8, [x9]
+
+    worker_expected = {
+        "PUDDING_WORKER_STANDBY": (80, "BL"),
+        "PUDDING_WORKER_RETURN": (120, "B"),
+    }
+    for symbol, (offset, kind) in worker_expected.items():
+        pattern = rf"^A16_POINTER_RATE_WORKER_{symbol}='{offset}:{kind}'$"
+        assert re.search(pattern, worker_manifest, re.MULTILINE), symbol
 
     print("Android 16 pointer-rate payload binary contract: PASS")
 

@@ -243,17 +243,21 @@ pointer-layout payload:
   352.8 kHz from the module's seven-rate contract;
 - rejects every non-usecase-3 stream before reading or writing private rate
   state;
-- for a live usecase-3 PAL stream, calls the concrete `standby()` under the
-  inspected configure mutex and abandons the update if standby fails;
-- only after a successful standby, publishes `AudioPortConfig.sampleRate` at
-  `+0x8`, its discriminator at `+0xc`, and the cached PAL rate at `+0x40`; and
+- publishes only `AudioPortConfig.sampleRate` at `+0x8` and its discriminator
+  at `+0xc` from the Binder parameter thread;
+- at the head of `MiStreamOutPrimary::transfer()`, compares that request with
+  the cached PAL rate, invokes the concrete standby on the writer thread for a
+  live handle, and abandons the cache update if standby fails;
+- after a successful teardown (or for a cold handle), publishes the cached PAL
+  rate at `+0x40` and resumes the original transfer/configure lifecycle; and
 - returns to the stock parameter destruction and status path.
 
-The payload lives in a linker-owned executable zero gap whose owner call,
-geometry and emptiness are verified before use. The hook, object fields, PLT
-calls and concrete standby symbol are resolved from semantic signatures at
-installation time. Pudding and Nezha OTA libraries both pass two-pass offline
-idempotence tests, while a deliberately mixed Pudding layout fails closed.
+The two payloads live in a linker-owned 384-byte executable zero gap whose
+owner call, geometry and emptiness are verified before use. Both hook sites,
+object fields, PLT calls and concrete standby symbol are resolved from semantic
+signatures at installation time. Pudding, Popsicle, Byron and Pandora OTA
+libraries pass two-pass offline idempotence tests, while deliberately mixed
+parameter and worker hooks fail closed.
 
 ### Popsicle variant
 
@@ -264,7 +268,7 @@ and audio HAL service are byte-identical to Pudding. AudioFlinger and the core
 QTI HAL have separate Build IDs.
 
 The distinct core HAL still resolves every Pudding-specific pointer-layout
-anchor: `AudioPortConfig*`, cached PAL attributes, configure mutex, sample-rate
+anchor: `AudioPortConfig*`, cached PAL attributes, sample-rate
 field/discriminator, usecase tag, PAL handle and the linker-owned executable
 gap. Its flagless ODM `hifi_playback` port maps to Deep Buffer usecase 3 and it
 also lacks the static `HifiPlayback` helper. The correct adaptation is therefore
@@ -281,12 +285,13 @@ library uses the shared `libdev_usb.so` table. Its core HAL has the distinct
 Build ID `8e108e51c3e4ce824f17b99e46fc65af`.
 
 The new HAL nevertheless resolves every shared pointer-layout anchor and the
-same owned executable gap. Its concrete standby wrapper and complete base
-shutdown chain were inspected and do not reacquire the configure mutex. The
-full patch set is twice-application idempotent, and a deliberately mixed HAL
-hook fails closed. Byron therefore uses the Android 16 pointer-layout handler
-under its own exact device baseline; it is not selected through a broad model
-family label.
+same owned executable gap. Its transfer and shutdown chains confirm that no
+dedicated usecase-3 mutex serializes `pal_stream_write()` against a Binder-side
+standby. The handler therefore splits the operation: the Binder thread records
+intent and the transfer worker performs teardown plus cache handoff. The full
+patch set is twice-application idempotent, and deliberately mixed parameter or
+worker hooks fail closed. Byron uses this layout under its own exact device
+baseline; it is not selected through a broad model family label.
 
 ## Idle 384 kHz retention
 

@@ -1,6 +1,6 @@
 # Controlled test plan
 
-`0.8.4-alpha` must pass offline verification before any device installation.
+`0.8.5-alpha` must pass offline verification before any device installation.
 Do not live-replace audio libraries or restart audioserver manually.
 
 ## Offline gate
@@ -12,6 +12,8 @@ The build must confirm:
 - the 140-byte final USB sender gate;
 - the 86-byte HIFI-only dynamic-default hook;
 - exact stock call-site and object-layout signatures;
+- the Android 17 `{3,8,13}` guard on both parameter and transfer sides of the
+  same QTI mutex;
 - same-size patched ELF images and byte-idempotent reapplication;
 - all routing and final transport-gate fail-closed cases, including bounded
   output and device collections.
@@ -27,7 +29,7 @@ python3 tests/verify_firmware_patch.py \
   libaudiocorehal.qti.so \
   libaudiopolicycomponents.so \
   libaudiopolicymanagerimpl.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.8.4-alpha.zip
+  dist/xiaomi-usb-dac-rate-follower-v0.8.5-alpha.zip
 ```
 
 For Xiaomi 15, use the semantic baseline validator instead; its USB target is
@@ -35,7 +37,7 @@ resolved to `libar-pal.so` by the baseline:
 
 ```sh
 bash scripts/validate_offline_target.sh 16 port \
-  dist/xiaomi-usb-dac-rate-follower-v0.8.4-alpha.zip \
+  dist/xiaomi-usb-dac-rate-follower-v0.8.5-alpha.zip \
   /path/to/elfpatcher-host dada-sm8750-sun.conf
 ```
 
@@ -70,6 +72,13 @@ from recovery/root. Do not repeatedly reopen a player against a dying audio
 service.
 
 ## Primary same-app matrix
+
+The full hot-transition matrix applies to Android 17 and to the Android 16
+pointer-layout targets. On Android 16, `setVendorParameters()` records only the
+requested rate; the next `MiStreamOutPrimary::transfer()` invocation performs
+standby and cache handoff on the writer thread before stock transfer/configure
+continues. This avoids a cross-thread `pal_stream_write()` / close race without
+turning active playback into a cold-start-only implementation.
 
 Use verified local files or tracks whose source rates are known. For both
 NetEase and Apple Music, test each transition at least five times:

@@ -50,7 +50,7 @@ Resolved Popsicle HAL locations are diagnostics only:
 - rate hook context: `0x1cc630`
 - Platform/AudioPortConfig pointer layout: `0x1cb828`
 - cached PAL attributes: `0x1cb898`
-- configure mutex and sample-rate consumer: `0x1aec24` / `0x1af48c`
+- sample-rate consumer: `0x1af48c`
 - usecase tag and PAL handle: `0x1caa70` / `0x1abe40`
 - linker-owned executable-gap anchor: `0x11f1b0`
 
@@ -64,6 +64,12 @@ The Android 16 driver successfully applied the native HIFI route, dynamic
 default, MixerThread synchronization, Qualcomm USB 44.1 kHz table fix and
 Android 16 pointer-layout HAL rate handler to copied Popsicle OTA files. A
 second complete application was byte-identical to the first.
+
+The parameter hook records target-rate intent only. A second hook at the head
+of `MiStreamOutPrimary::transfer()` owns live standby and cache publication,
+then resumes the original configure/write lifecycle. It covers both the normal
+QTI path and `hyperWrite()`, so the adaptation remains active-rate-following
+without closing PAL from the Binder parameter thread.
 
 `popsicle-sm8850-canoe-aidl-v3` is recorded as theoretically validated from
 the offline OTA. Installation is allowed after a warning and volume-key

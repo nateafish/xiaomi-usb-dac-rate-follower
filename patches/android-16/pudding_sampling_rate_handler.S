@@ -1,9 +1,8 @@
 .extern STR_PARMS_GET_STR
 .extern ATOI
-.extern MUTEX_LOCK
-.extern PUDDING_STANDBY
-.extern MUTEX_UNLOCK
 .extern PUDDING_RATE_RETURN
+.extern PUDDING_WORKER_STANDBY
+.extern PUDDING_WORKER_RETURN
 
 #ifndef A16_POINTER_LAYOUT_SHIFT
 #define A16_POINTER_LAYOUT_SHIFT 0
@@ -11,7 +10,6 @@
 
 .equ A16_POINTER_USECASE_OFFSET, 0x350 + A16_POINTER_LAYOUT_SHIFT
 .equ A16_POINTER_CONFIG_OFFSET, 0x760 + A16_POINTER_LAYOUT_SHIFT
-.equ A16_POINTER_MUTEX_OFFSET, 0x790 + A16_POINTER_LAYOUT_SHIFT
 .equ A16_POINTER_CACHED_ATTR_OFFSET, 0x7e8 + A16_POINTER_LAYOUT_SHIFT
 .equ A16_POINTER_PAL_HANDLE_OFFSET, 0x3a0 + A16_POINTER_LAYOUT_SHIFT
 
@@ -60,53 +58,24 @@ a16_pudding_sampling_rate_handler:
     cmp     w10, #3
     b.ne    .Lresume
 
-    // This Android 16 layout stores both objects by pointer.  Validate both
-    // before changing either one so an unexpected layout cannot leave split
-    // rate state.
-    ldr     x10, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]
-    cbz     x10, .Lresume
+    // The Binder parameter thread publishes only the requested
+    // AudioPortConfig value.  It must never close PAL or modify the active PAL
+    // attribute cache while transfer() can be inside pal_stream_write().
     ldr     x11, [x21, #A16_POINTER_CONFIG_OFFSET]
     cbz     x11, .Lresume
-    ldr     w12, [x10, #0x40]
+    ldrb    w12, [x11, #0xc]
+    cbz     w12, .Lpublish
+    ldr     w12, [x11, #0x8]
     cmp     w12, w9
     b.eq    .Lresume
 
-    // If a PAL stream is live, close the old-rate stream first.  Keep the
-    // requested rate and standby result in our own aligned stack frame because
-    // all three calls may clobber caller-saved registers.
-    ldr     x10, [x21, #A16_POINTER_PAL_HANDLE_OFFSET]
-    cbz     x10, .Lcommit
-
-    // This is the same configure mutex used by the stock configure() method.
-    // The inspected standby wrapper does not acquire it itself.
-    sub     sp, sp, #16
-    str     w9, [sp]
-    add     x0, x21, #A16_POINTER_MUTEX_OFFSET
-    bl      MUTEX_LOCK
-    mov     x0, x21
-    bl      PUDDING_STANDBY
-    str     w0, [sp, #4]
-    add     x0, x21, #A16_POINTER_MUTEX_OFFSET
-    bl      MUTEX_UNLOCK
-    ldr     w12, [sp, #4]
-    ldr     w9, [sp]
-    add     sp, sp, #16
-    cbnz    w12, .Lresume
-
-    // standby() may update private state, so re-load and re-check both
-    // pointers before committing the new rate.
-    ldr     x10, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]
-    cbz     x10, .Lresume
-    ldr     x11, [x21, #A16_POINTER_CONFIG_OFFSET]
-    cbz     x11, .Lresume
-
-.Lcommit:
-    // Publish value before its presence discriminator, then update the cache.
-    // At this point no live old-rate PAL stream remains.
+.Lpublish:
+    // Publish the value before its presence discriminator.  The transfer
+    // worker below consumes this request and owns the complete standby /
+    // cached-attribute / configure handoff.
     str     w9, [x11, #0x8]
     mov     w12, #1
     strb    w12, [x11, #0xc]
-    str     w9, [x10, #0x40]
 
 .Lresume:
     mov     x0, x23
@@ -116,3 +85,84 @@ a16_pudding_sampling_rate_handler:
     .asciz  "sampling_rate"
 .p2align 2
     .space  256 - (. - a16_pudding_sampling_rate_handler)
+
+// Android 16 has no mutex shared by the parameter path and usecase-3 PAL
+// writes.  Reconfiguration therefore runs at the head of Xiaomi's transfer()
+// worker, before either the ordinary QTI transfer or hyperWrite branch.  This
+// is the same ownership model used by the Dada payload: the Binder thread only
+// records intent; the writer thread performs standby and makes the cache
+// current before stock code continues.
+.section .a16_pointer_rate_worker, "ax"
+.p2align 2
+.global a16_pointer_rate_worker
+a16_pointer_rate_worker:
+    // The displaced instruction reads [x9], and the older pointer layout also
+    // leaves x3/x4 live until the final base transfer call.  Preserve all
+    // three across the standby call in a private aligned frame.
+    sub     sp, sp, #0x20
+    stp     x9, x3, [sp]
+    str     x4, [sp, #0x10]
+
+#if A16_POINTER_LAYOUT_SHIFT == 0
+    ldrh    w8, [x21, #A16_POINTER_USECASE_OFFSET]
+#else
+    ldrh    w8, [x23, #A16_POINTER_USECASE_OFFSET]
+#endif
+    cmp     w8, #3
+    b.ne    .Lworker_resume
+
+#if A16_POINTER_LAYOUT_SHIFT == 0
+    ldr     x10, [x21, #A16_POINTER_CONFIG_OFFSET]
+#else
+    ldr     x10, [x23, #A16_POINTER_CONFIG_OFFSET]
+#endif
+    cbz     x10, .Lworker_resume
+    ldrb    w8, [x10, #0xc]
+    tbz     w8, #0, .Lworker_resume
+    ldr     w12, [x10, #0x8]
+
+#if A16_POINTER_LAYOUT_SHIFT == 0
+    ldr     x11, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]
+#else
+    ldr     x11, [x23, #A16_POINTER_CACHED_ATTR_OFFSET]
+#endif
+    cbz     x11, .Lworker_resume
+    ldr     w8, [x11, #0x40]
+    cmp     w8, w12
+    b.eq    .Lworker_resume
+
+#if A16_POINTER_LAYOUT_SHIFT == 0
+    ldr     x10, [x21, #A16_POINTER_PAL_HANDLE_OFFSET]
+#else
+    ldr     x10, [x23, #A16_POINTER_PAL_HANDLE_OFFSET]
+#endif
+    cbz     x10, .Lworker_commit
+    str     w12, [sp, #0x18]
+#if A16_POINTER_LAYOUT_SHIFT == 0
+    mov     x0, x21
+#else
+    mov     x0, x23
+#endif
+    bl      PUDDING_WORKER_STANDBY
+    cbnz    w0, .Lworker_resume
+    ldr     w12, [sp, #0x18]
+#if A16_POINTER_LAYOUT_SHIFT == 0
+    ldr     x11, [x21, #A16_POINTER_CACHED_ATTR_OFFSET]
+#else
+    ldr     x11, [x23, #A16_POINTER_CACHED_ATTR_OFFSET]
+#endif
+    cbz     x11, .Lworker_resume
+
+.Lworker_commit:
+    str     w12, [x11, #0x40]
+
+.Lworker_resume:
+    ldp     x9, x3, [sp]
+    ldr     x4, [sp, #0x10]
+    add     sp, sp, #0x20
+    // Preserve the displaced `ldrb w8, [x9]` before Xiaomi's stock gates.
+    ldrb    w8, [x9]
+    b       PUDDING_WORKER_RETURN
+
+.p2align 2
+    .space  128 - (. - a16_pointer_rate_worker)

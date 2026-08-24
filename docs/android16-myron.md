@@ -32,8 +32,8 @@ Xiaomi 15/Dada worker-layout target.
 
 ## Independent HAL layout
 
-Myron does not reuse the Byron/Pudding private-object layout. Six members used
-by the transactional rate handler move together by `0x28`:
+Myron does not reuse the Byron/Pudding private-object layout. The relevant
+private members move together by `0x28`:
 
 | Member | Standard Android 16 layout | Myron layout |
 | --- | ---: | ---: |
@@ -41,21 +41,23 @@ by the transactional rate handler move together by `0x28`:
 | live PAL handle | `+0x3a0` | `+0x3c8` |
 | `Platform*` | `+0x758` | `+0x780` |
 | `AudioPortConfig*` | `+0x760` | `+0x788` |
-| configure mutex | `+0x790` | `+0x7b8` |
 | cached PAL attributes | `+0x7e8` | `+0x810` |
 
 The module therefore contains a separately compiled shifted-layout payload and
 a separate set of function-local semantic signatures. The installer first
-proves every pointer, optional sample-rate field, usecase tag, PAL handle,
-standby symbol and linker-owned executable gap. It aborts before writing if the
+proves every pointer, optional sample-rate field, usecase tag, PAL handle and
+linker-owned 384-byte executable gap, plus a transfer entry that dominates both
+normal and `hyperWrite()` paths. It aborts before writing if the
 normal or shifted layout is absent, ambiguous or partially patched.
 
-The exact Myron standby wrapper and base standby path were inspected. The
-wrapper preserves and returns the base standby status. Its internal recursive
-stream mutex is released before teardown and is distinct from the configure
-mutex used by the injected transaction. A failed standby therefore exits
-without publishing the requested rate; pointer state is reloaded after a
-successful standby before the new rate is committed.
+The exact Myron wrapper transfer, base transfer, standby and shutdown paths
+were inspected. Its internal recursive standby mutex does not cover the case-3
+`pal_stream_write()` path, so the parameter thread does not tear down PAL. It
+publishes only the requested `AudioPortConfig` value. The separately compiled
+shifted worker payload performs standby, reloads the shifted cache pointer,
+commits the target rate only on success, and resumes the original transfer /
+configure lifecycle on the same writer thread. This preserves active adaptive
+switching while removing the close/write race.
 
 Resolved offsets from this OTA are diagnostics only:
 
@@ -64,6 +66,7 @@ Resolved offsets from this OTA are diagnostics only:
 - MixerThread synchronization: `0x154360`;
 - Qualcomm USB rate table: `0x7150`;
 - HAL rate hook: `0x1e1a34`;
+- HAL transfer-worker hook: `0x1e016c`;
 - HAL executable cave: `0x13492c`.
 
 Installation re-resolves all locations and branch targets from the live ELF.

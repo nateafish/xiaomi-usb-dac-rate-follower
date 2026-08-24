@@ -16,8 +16,12 @@
     || abort "! Missing Xiaomi 15 worker relocation manifest"
 . "$MODPATH/patches/a16_pointer_rate.relocations.conf" \
     || abort "! Missing Android 16 pointer-rate relocation manifest"
+. "$MODPATH/patches/a16_pointer_rate_worker.relocations.conf" \
+    || abort "! Missing Android 16 pointer-rate worker relocation manifest"
 . "$MODPATH/patches/a16_shifted_pointer_rate.relocations.conf" \
     || abort "! Missing Android 16 shifted pointer-rate relocation manifest"
+. "$MODPATH/patches/a16_shifted_pointer_rate_worker.relocations.conf" \
+    || abort "! Missing Android 16 shifted pointer-rate worker relocation manifest"
 . "$MODPATH/lib/elf-runtime.sh"
 
 apply_target_patches() {
@@ -122,11 +126,17 @@ apply_target_patches() {
         HAL_PATCH_KIND=nezha-usecase-guard
     elif pudding_match=$($ELFPATCHER find "$HAL_DEST" \
             "symbol:$PUDDING_RATE_FUNCTION" \
-            "$PUDDING_RATE_CONTEXT" 2>/dev/null); then
+            "$PUDDING_RATE_CONTEXT" 2>/dev/null) \
+            && pudding_worker_match=$($ELFPATCHER find "$HAL_DEST" \
+                "symbol:$PUDDING_TRANSFER_FUNCTION" \
+                "$PUDDING_WORKER_CONTEXT" 2>/dev/null); then
         HAL_PATCH_KIND=a16-pointer-rate-handler
     elif shifted_match=$($ELFPATCHER find "$HAL_DEST" \
             "symbol:$SHIFTED_RATE_FUNCTION" \
-            "$SHIFTED_RATE_CONTEXT" 2>/dev/null); then
+            "$SHIFTED_RATE_CONTEXT" 2>/dev/null) \
+            && shifted_worker_match=$($ELFPATCHER find "$HAL_DEST" \
+                "symbol:$SHIFTED_TRANSFER_FUNCTION" \
+                "$SHIFTED_WORKER_CONTEXT" 2>/dev/null); then
         HAL_PATCH_KIND=a16-shifted-pointer-rate-handler
     else
         abort "! Android 16 Qualcomm HAL layout is unsupported"
@@ -250,12 +260,15 @@ apply_target_patches() {
             POINTER_RATE_FUNCTION=$SHIFTED_RATE_FUNCTION
             POINTER_STANDBY_SYMBOL=$SHIFTED_STANDBY_SYMBOL
             POINTER_CONFIGURE_FUNCTION=$SHIFTED_CONFIGURE_FUNCTION
+            POINTER_TRANSFER_FUNCTION=$SHIFTED_TRANSFER_FUNCTION
             POINTER_MATCH=$shifted_match
+            POINTER_WORKER_MATCH=$shifted_worker_match
             POINTER_RATE_SITE_DELTA=$SHIFTED_RATE_SITE_DELTA
             POINTER_RATE_STOCK=$SHIFTED_RATE_STOCK
+            POINTER_WORKER_SITE_DELTA=$SHIFTED_WORKER_SITE_DELTA
+            POINTER_WORKER_STOCK=$SHIFTED_WORKER_STOCK
             POINTER_PLATFORM_CONFIG_LAYOUT=$SHIFTED_PLATFORM_CONFIG_LAYOUT
             POINTER_CACHED_ATTR_LAYOUT=$SHIFTED_CACHED_ATTR_LAYOUT
-            POINTER_CONFIG_MUTEX_LAYOUT=$SHIFTED_CONFIG_MUTEX_LAYOUT
             POINTER_SAMPLE_RATE_LAYOUT=$SHIFTED_SAMPLE_RATE_LAYOUT
             POINTER_USECASE_TAG_LAYOUT=$SHIFTED_USECASE_TAG_LAYOUT
             POINTER_PAL_HANDLE_LAYOUT=$SHIFTED_PAL_HANDLE_LAYOUT
@@ -265,27 +278,29 @@ apply_target_patches() {
             POINTER_CAVE_ALIGNMENT=$SHIFTED_CAVE_ALIGNMENT
             POINTER_CAVE_OWNER_CALL_DELTA=$SHIFTED_CAVE_OWNER_CALL_DELTA
             POINTER_CAVE_OWNER_PLT=$SHIFTED_CAVE_OWNER_PLT
+            POINTER_WORKER_CAVE_DELTA=$SHIFTED_WORKER_CAVE_DELTA
             POINTER_STR_PARMS_GET_STR_PLT=$SHIFTED_STR_PARMS_GET_STR_PLT
             POINTER_ATOI_PLT=$SHIFTED_ATOI_PLT
-            POINTER_MUTEX_LOCK_PLT=$SHIFTED_MUTEX_LOCK_PLT
-            POINTER_MUTEX_UNLOCK_PLT=$SHIFTED_MUTEX_UNLOCK_PLT
             POINTER_PAYLOAD=$MODPATH/patches/a16_shifted_pointer_rate_handler.template.bin
+            POINTER_WORKER_PAYLOAD=$MODPATH/patches/a16_shifted_pointer_rate_worker.template.bin
             POINTER_RELOC_STR_PARMS_GET_STR=$A16_SHIFTED_POINTER_RATE_STR_PARMS_GET_STR
             POINTER_RELOC_ATOI=$A16_SHIFTED_POINTER_RATE_ATOI
-            POINTER_RELOC_MUTEX_LOCK=$A16_SHIFTED_POINTER_RATE_MUTEX_LOCK
-            POINTER_RELOC_STANDBY=$A16_SHIFTED_POINTER_RATE_PUDDING_STANDBY
-            POINTER_RELOC_MUTEX_UNLOCK=$A16_SHIFTED_POINTER_RATE_MUTEX_UNLOCK
             POINTER_RELOC_RATE_RETURN=$A16_SHIFTED_POINTER_RATE_PUDDING_RATE_RETURN
+            POINTER_RELOC_WORKER_STANDBY=$A16_SHIFTED_POINTER_RATE_WORKER_PUDDING_WORKER_STANDBY
+            POINTER_RELOC_WORKER_RETURN=$A16_SHIFTED_POINTER_RATE_WORKER_PUDDING_WORKER_RETURN
         else
             POINTER_RATE_FUNCTION=$PUDDING_RATE_FUNCTION
             POINTER_STANDBY_SYMBOL=$PUDDING_STANDBY_SYMBOL
             POINTER_CONFIGURE_FUNCTION=$PUDDING_CONFIGURE_FUNCTION
+            POINTER_TRANSFER_FUNCTION=$PUDDING_TRANSFER_FUNCTION
             POINTER_MATCH=$pudding_match
+            POINTER_WORKER_MATCH=$pudding_worker_match
             POINTER_RATE_SITE_DELTA=$PUDDING_RATE_SITE_DELTA
             POINTER_RATE_STOCK=$PUDDING_RATE_STOCK
+            POINTER_WORKER_SITE_DELTA=$PUDDING_WORKER_SITE_DELTA
+            POINTER_WORKER_STOCK=$PUDDING_WORKER_STOCK
             POINTER_PLATFORM_CONFIG_LAYOUT=$PUDDING_PLATFORM_CONFIG_LAYOUT
             POINTER_CACHED_ATTR_LAYOUT=$PUDDING_CACHED_ATTR_LAYOUT
-            POINTER_CONFIG_MUTEX_LAYOUT=$PUDDING_CONFIG_MUTEX_LAYOUT
             POINTER_SAMPLE_RATE_LAYOUT=$PUDDING_SAMPLE_RATE_LAYOUT
             POINTER_USECASE_TAG_LAYOUT=$PUDDING_USECASE_TAG_LAYOUT
             POINTER_PAL_HANDLE_LAYOUT=$PUDDING_PAL_HANDLE_LAYOUT
@@ -295,17 +310,16 @@ apply_target_patches() {
             POINTER_CAVE_ALIGNMENT=$PUDDING_CAVE_ALIGNMENT
             POINTER_CAVE_OWNER_CALL_DELTA=$PUDDING_CAVE_OWNER_CALL_DELTA
             POINTER_CAVE_OWNER_PLT=$PUDDING_CAVE_OWNER_PLT
+            POINTER_WORKER_CAVE_DELTA=$PUDDING_WORKER_CAVE_DELTA
             POINTER_STR_PARMS_GET_STR_PLT=$PUDDING_STR_PARMS_GET_STR_PLT
             POINTER_ATOI_PLT=$PUDDING_ATOI_PLT
-            POINTER_MUTEX_LOCK_PLT=$PUDDING_MUTEX_LOCK_PLT
-            POINTER_MUTEX_UNLOCK_PLT=$PUDDING_MUTEX_UNLOCK_PLT
             POINTER_PAYLOAD=$MODPATH/patches/a16_pudding_sampling_rate_handler.template.bin
+            POINTER_WORKER_PAYLOAD=$MODPATH/patches/a16_pudding_rate_worker.template.bin
             POINTER_RELOC_STR_PARMS_GET_STR=$A16_POINTER_RATE_STR_PARMS_GET_STR
             POINTER_RELOC_ATOI=$A16_POINTER_RATE_ATOI
-            POINTER_RELOC_MUTEX_LOCK=$A16_POINTER_RATE_MUTEX_LOCK
-            POINTER_RELOC_STANDBY=$A16_POINTER_RATE_PUDDING_STANDBY
-            POINTER_RELOC_MUTEX_UNLOCK=$A16_POINTER_RATE_MUTEX_UNLOCK
             POINTER_RELOC_RATE_RETURN=$A16_POINTER_RATE_PUDDING_RATE_RETURN
+            POINTER_RELOC_WORKER_STANDBY=$A16_POINTER_RATE_WORKER_PUDDING_WORKER_STANDBY
+            POINTER_RELOC_WORKER_RETURN=$A16_POINTER_RATE_WORKER_PUDDING_WORKER_RETURN
         fi
 
         ep_find "$HAL_DEST" "symbol:$POINTER_RATE_FUNCTION" \
@@ -316,10 +330,6 @@ apply_target_patches() {
             "$POINTER_CACHED_ATTR_LAYOUT" \
             'Android 16 cached PAL-attribute layout' >/dev/null \
             || abort "! Android 16 cached PAL-attribute layout is incompatible"
-        ep_find "$HAL_DEST" "symbol:$POINTER_CONFIGURE_FUNCTION" \
-            "$POINTER_CONFIG_MUTEX_LAYOUT" \
-            'Android 16 configure-mutex layout' >/dev/null \
-            || abort "! Android 16 configure mutex is incompatible"
         ep_find "$HAL_DEST" "symbol:$POINTER_CONFIGURE_FUNCTION" \
             "$POINTER_SAMPLE_RATE_LAYOUT" \
             'Android 16 AudioPortConfig sample-rate layout' >/dev/null \
@@ -336,11 +346,15 @@ apply_target_patches() {
 
         PUDDING_RATE_SITE=$(offset_add "$POINTER_MATCH" \
             "$POINTER_RATE_SITE_DELTA")
+        PUDDING_WORKER_SITE=$(offset_add "$POINTER_WORKER_MATCH" \
+            "$POINTER_WORKER_SITE_DELTA")
         pudding_cave_anchor=$(ep_find "$HAL_DEST" exec \
             "$POINTER_CAVE_ANCHOR" 'Android 16 linker-gap owner') \
             || abort "! Cannot resolve the Android 16 executable-gap owner"
         PUDDING_CAVE_BASE=$(offset_add "$pudding_cave_anchor" \
             "$POINTER_CAVE_ANCHOR_SIZE")
+        PUDDING_WORKER_CAVE=$(offset_add "$PUDDING_CAVE_BASE" \
+            "$POINTER_WORKER_CAVE_DELTA")
         PUDDING_CAVE_OWNER=$(ep_plt "$HAL_DEST" \
             "$POINTER_CAVE_OWNER_PLT" 'Android 16 linker-gap owner call') \
             || abort "! Cannot resolve the Android 16 linker-gap owner call"
@@ -348,11 +362,13 @@ apply_target_patches() {
             "$(offset_add "$pudding_cave_anchor" \
                 "$POINTER_CAVE_OWNER_CALL_DELTA")" "$PUDDING_CAVE_OWNER" \
             || abort "! Android 16 executable gap has an unexpected owner"
-        require_stock_or_hook_branch "$HAL_DEST" "$PUDDING_RATE_SITE" \
-            "$POINTER_RATE_STOCK" "$PUDDING_CAVE_BASE" \
-            'Android 16 sampling_rate hook'
-        if hex_at "$HAL_DEST" "$PUDDING_RATE_SITE" \
-                "$POINTER_RATE_STOCK"; then
+        pointer_rate_stock=0
+        pointer_worker_stock=0
+        hex_at "$HAL_DEST" "$PUDDING_RATE_SITE" "$POINTER_RATE_STOCK" \
+            && pointer_rate_stock=1
+        hex_at "$HAL_DEST" "$PUDDING_WORKER_SITE" "$POINTER_WORKER_STOCK" \
+            && pointer_worker_stock=1
+        if [ "$pointer_rate_stock:$pointer_worker_stock" = 1:1 ]; then
             resolved_pudding_cave=$(ep_cave_after "$HAL_DEST" \
                 "$pudding_cave_anchor" "$POINTER_CAVE_ANCHOR_SIZE" \
                 "$POINTER_CAVE_REQUIRED_SIZE" "$POINTER_CAVE_ALIGNMENT" \
@@ -361,6 +377,13 @@ apply_target_patches() {
             [ $(( resolved_pudding_cave )) -eq \
                     $(( PUDDING_CAVE_BASE )) ] \
                 || abort "! Android 16 linker-gap geometry changed unexpectedly"
+        elif branch_points_to "$HAL_DEST" "$PUDDING_RATE_SITE" \
+                "$PUDDING_CAVE_BASE" \
+                && branch_points_to "$HAL_DEST" "$PUDDING_WORKER_SITE" \
+                    "$PUDDING_WORKER_CAVE"; then
+            :
+        else
+            abort "! Unknown or mixed Android 16 sampling_rate hook state"
         fi
 
         PUDDING_STR_PARMS_GET_STR=$(ep_plt "$HAL_DEST" \
@@ -368,28 +391,26 @@ apply_target_patches() {
             || abort "! Cannot resolve Android 16 str_parms_get_str"
         PUDDING_ATOI=$(ep_plt "$HAL_DEST" "$POINTER_ATOI_PLT" \
             'Android 16 atoi') || abort "! Cannot resolve Android 16 atoi"
-        PUDDING_MUTEX_LOCK=$(ep_plt "$HAL_DEST" \
-            "$POINTER_MUTEX_LOCK_PLT" 'Android 16 mutex lock') \
-            || abort "! Cannot resolve Android 16 mutex lock"
-        PUDDING_MUTEX_UNLOCK=$(ep_plt "$HAL_DEST" \
-            "$POINTER_MUTEX_UNLOCK_PLT" 'Android 16 mutex unlock') \
-            || abort "! Cannot resolve Android 16 mutex unlock"
-        PUDDING_STANDBY=$(ep_symbol "$HAL_DEST" \
-            "$POINTER_STANDBY_SYMBOL" 'Android 16 standby') \
-            || abort "! Cannot resolve Android 16 standby"
-
+        PUDDING_STANDBY=$(ep_symbol "$HAL_DEST" "$POINTER_STANDBY_SYMBOL" \
+            'Android 16 transfer-worker standby') \
+            || abort "! Cannot resolve Android 16 transfer-worker standby"
         $ELFPATCHER inject "$HAL_DEST" "$PUDDING_CAVE_BASE" \
             "$POINTER_PAYLOAD" \
             "${POINTER_RELOC_STR_PARMS_GET_STR}:$PUDDING_STR_PARMS_GET_STR" \
             "${POINTER_RELOC_ATOI}:$PUDDING_ATOI" \
-            "${POINTER_RELOC_MUTEX_LOCK}:$PUDDING_MUTEX_LOCK" \
-            "${POINTER_RELOC_STANDBY}:$PUDDING_STANDBY" \
-            "${POINTER_RELOC_MUTEX_UNLOCK}:$PUDDING_MUTEX_UNLOCK" \
             "${POINTER_RELOC_RATE_RETURN}:$(offset_add "$PUDDING_RATE_SITE" 4)" \
             || abort "! Android 16 sampling_rate handler injection failed"
+        $ELFPATCHER inject "$HAL_DEST" "$PUDDING_WORKER_CAVE" \
+            "$POINTER_WORKER_PAYLOAD" \
+            "${POINTER_RELOC_WORKER_STANDBY}:$PUDDING_STANDBY" \
+            "${POINTER_RELOC_WORKER_RETURN}:$(offset_add "$PUDDING_WORKER_SITE" 4)" \
+            || abort "! Android 16 sampling_rate worker injection failed"
         $ELFPATCHER branch "$HAL_DEST" "$PUDDING_RATE_SITE" \
             "$PUDDING_CAVE_BASE" B \
             || abort "! Android 16 sampling_rate hook relocation failed"
+        $ELFPATCHER branch "$HAL_DEST" "$PUDDING_WORKER_SITE" \
+            "$PUDDING_WORKER_CAVE" B \
+            || abort "! Android 16 sampling_rate worker hook relocation failed"
     fi
 
     branch_points_to "$POLICY_DEST" "$SELECT_SITE" "$CAVE_BASE" \
@@ -413,6 +434,9 @@ apply_target_patches() {
         branch_points_to "$HAL_DEST" "$PUDDING_RATE_SITE" \
             "$PUDDING_CAVE_BASE" \
             || abort "! Android 16 sampling_rate hook verification failed"
+        branch_points_to "$HAL_DEST" "$PUDDING_WORKER_SITE" \
+            "$PUDDING_WORKER_CAVE" \
+            || abort "! Android 16 sampling_rate worker verification failed"
     fi
 
     USB_TABLE_SITE=$(ep_symbol "$USB_DEST" "$USB_RATE_SYMBOL" \
@@ -424,6 +448,6 @@ apply_target_patches() {
     elif [ "$HAL_PATCH_KIND" = nezha-usecase-guard ]; then
         ui_print "- Offline Android 16 map: Qualcomm-HAL=$QTI_SITE"
     else
-        ui_print "- Offline Android 16 map: pointer-HAL=$PUDDING_RATE_SITE cave=$PUDDING_CAVE_BASE"
+        ui_print "- Offline Android 16 map: pointer-HAL parameter=$PUDDING_RATE_SITE worker=$PUDDING_WORKER_SITE cave=$PUDDING_CAVE_BASE"
     fi
 }

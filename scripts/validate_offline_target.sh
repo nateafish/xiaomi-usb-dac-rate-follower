@@ -123,15 +123,26 @@ if [[ ${HAL_PATCH_KIND:-} == dada-worker-rate-handler ]]; then
     fi
 elif [[ ${HAL_PATCH_KIND:-} == a16-pointer-rate-handler \
         || ${HAL_PATCH_KIND:-} == a16-shifted-pointer-rate-handler ]]; then
-    mixed_hal=$WORK_DIR/work/hal-mixed.so
-    cp -p "$HAL_DEST" "$mixed_hal"
-    "$ELFPATCHER" branch "$mixed_hal" "$PUDDING_RATE_SITE" \
+    mixed_parameter_hal=$WORK_DIR/work/hal-mixed-parameter.so
+    cp -p "$HAL_DEST" "$mixed_parameter_hal"
+    "$ELFPATCHER" branch "$mixed_parameter_hal" "$PUDDING_RATE_SITE" \
         "$((PUDDING_RATE_SITE + 4))" B
     if (
-        HAL_DEST=$mixed_hal
+        HAL_DEST=$mixed_parameter_hal
         apply_target_patches
     ) >/dev/null 2>&1; then
-        echo "Android 16 mixed pointer-rate hook state was not rejected" >&2
+        echo "Android 16 mixed pointer parameter-hook state was not rejected" >&2
+        exit 1
+    fi
+    mixed_worker_hal=$WORK_DIR/work/hal-mixed-worker.so
+    cp -p "$HAL_DEST" "$mixed_worker_hal"
+    "$ELFPATCHER" branch "$mixed_worker_hal" "$PUDDING_WORKER_SITE" \
+        "$((PUDDING_WORKER_SITE + 4))" B
+    if (
+        HAL_DEST=$mixed_worker_hal
+        apply_target_patches
+    ) >/dev/null 2>&1; then
+        echo "Android 16 mixed pointer worker-hook state was not rejected" >&2
         exit 1
     fi
 elif [[ ${HAL_PATCH_KIND:-} == nezha-usecase-guard ]]; then
@@ -144,6 +155,30 @@ elif [[ ${HAL_PATCH_KIND:-} == nezha-usecase-guard ]]; then
         apply_target_patches
     ) >/dev/null 2>&1; then
         echo "Android 16 mixed Qualcomm guard state was not rejected" >&2
+        exit 1
+    fi
+elif [[ $ANDROID_MAJOR == 17 && -n ${QTI_SITE:-} \
+        && -n ${QTI_TRANSFER_SITE:-} ]]; then
+    mixed_parameter_hal=$WORK_DIR/work/hal-mixed-a17-parameter.so
+    cp -p "$HAL_DEST" "$mixed_parameter_hal"
+    "$ELFPATCHER" branch "$mixed_parameter_hal" "$QTI_SITE" \
+        "$((QTI_SITE + 4))" B
+    if (
+        HAL_DEST=$mixed_parameter_hal
+        apply_target_patches
+    ) >/dev/null 2>&1; then
+        echo "Android 17 mixed parameter guard was not rejected" >&2
+        exit 1
+    fi
+    mixed_transfer_hal=$WORK_DIR/work/hal-mixed-a17-transfer.so
+    cp -p "$HAL_DEST" "$mixed_transfer_hal"
+    "$ELFPATCHER" branch "$mixed_transfer_hal" "$QTI_TRANSFER_SITE" \
+        "$((QTI_TRANSFER_SITE + 4))" B
+    if (
+        HAL_DEST=$mixed_transfer_hal
+        apply_target_patches
+    ) >/dev/null 2>&1; then
+        echo "Android 17 mixed transfer guard was not rejected" >&2
         exit 1
     fi
 fi
