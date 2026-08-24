@@ -101,7 +101,7 @@ done < <(remote 'find /system/lib /system/lib64 /system_ext/lib /system_ext/lib6
     -name "libaudiopolicymanagerimpl.so" -o -iname "*audiopolicymanager*stub*.so" -o \
     -name "libaudioclient.so" -o -name "libaudiopolicyservice.so" -o \
     -name "libaudioflinger.so" -o -name "libaudioflingerimpl.so" -o \
-    -name "libdev_usb.so" -o \
+    -name "libdev_usb.so" -o -name "libar-pal.so" -o \
     -iname "*audioplatformconverter*.so" -o -iname "*audiocorehal*.so" -o \
     -iname "*audioaidl*.so" -o -iname "*audiohal*.so" -o \
     -iname "audio.primary*.so" -o -iname "audio.usb*.so" -o \
@@ -127,7 +127,7 @@ done < <(remote 'find /vendor/etc /odm/etc /system/etc /system_ext/etc /product/
 while IFS= read -r path; do
     [[ -n "$path" && "$path" == /* && "$path" != *" (deleted)"* ]] || continue
     copy_root_file "${path% (deleted)}"
-done < <(remote 'for d in /proc/[0-9]*; do p=${d##*/}; cmd=$(tr "\\000" " " < "$d/cmdline" 2>/dev/null); case "$cmd" in *audioserver*|*audiohal*|*hardware.audio*|*audio.service*) readlink "$d/exe" 2>/dev/null; sed -n "s/.* \\(\\/[^ ]*\\)$/\\1/p" "$d/maps" 2>/dev/null | grep -iE "/([^/]*audio[^/]*|libpal|libagm|libacdb|libdev_usb|libqahw|libtinyalsa|libalsautils|libaudioroute)[^/]*$" || true;; esac; done | sort -u')
+done < <(remote 'for d in /proc/[0-9]*; do p=${d##*/}; cmd=$(tr "\\000" " " < "$d/cmdline" 2>/dev/null); case "$cmd" in *audioserver*|*audiohal*|*hardware.audio*|*audio.service*) readlink "$d/exe" 2>/dev/null; sed -n "s/.* \\(\\/[^ ]*\\)$/\\1/p" "$d/maps" 2>/dev/null | grep -iE "/([^/]*audio[^/]*|libpal|libar-pal|libagm|libacdb|libdev_usb|libqahw|libtinyalsa|libalsautils|libaudioroute)[^/]*$" || true;; esac; done | sort -u')
 
 while IFS= read -r file; do
     relative=${file#"$OUT/"}

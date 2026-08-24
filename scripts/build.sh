@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.8.2-alpha
+VERSION=0.8.3-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -104,6 +104,26 @@ python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/android-16/pudding_sampling_rate_handler.S" \
     -o "$BUILD_DIR/a16_pudding_sampling_rate_handler.o"
+"$CLANG" --target=aarch64-linux-android35 -c \
+    "$ROOT_DIR/patches/android-16/dada_sampling_rate_handler.S" \
+    -o "$BUILD_DIR/a16_dada_sampling_rate_handler.o"
+python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
+    --readelf "$LLVM_BIN/llvm-readelf" \
+    --object "$BUILD_DIR/a16_dada_sampling_rate_handler.o" \
+    --section .rela.a16_dada_rate_parameter \
+    --prefix A16_DADA_RATE_PARAMETER \
+    --output "$BUILD_DIR/a16_dada_rate_parameter.relocations.conf" \
+    --expect DADA_STR_PARMS_GET_STR=R_AARCH64_CALL26 \
+    --expect DADA_ATOI=R_AARCH64_CALL26 \
+    --expect DADA_RATE_RETURN=R_AARCH64_JUMP26
+python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
+    --readelf "$LLVM_BIN/llvm-readelf" \
+    --object "$BUILD_DIR/a16_dada_sampling_rate_handler.o" \
+    --section .rela.a16_dada_rate_worker \
+    --prefix A16_DADA_RATE_WORKER \
+    --output "$BUILD_DIR/a16_dada_rate_worker.relocations.conf" \
+    --expect DADA_STANDBY=R_AARCH64_CALL26 \
+    --expect DADA_WORKER_RETURN=R_AARCH64_JUMP26
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .a16_native_hifi_route="$BUILD_DIR/a16_native_hifi_route.template.bin" \
     "$BUILD_DIR/a16_native_hifi_route.o"
@@ -116,6 +136,10 @@ python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
 "$LLVM_BIN/llvm-objcopy" \
     --dump-section .a16_pudding_sampling_rate_handler="$BUILD_DIR/a16_pudding_sampling_rate_handler.template.bin" \
     "$BUILD_DIR/a16_pudding_sampling_rate_handler.o"
+"$LLVM_BIN/llvm-objcopy" \
+    --dump-section .a16_dada_rate_parameter="$BUILD_DIR/a16_dada_rate_parameter.template.bin" \
+    --dump-section .a16_dada_rate_worker="$BUILD_DIR/a16_dada_rate_worker.template.bin" \
+    "$BUILD_DIR/a16_dada_sampling_rate_handler.o"
 
 require_size "$BUILD_DIR/native_hifi_cave.template.bin" 788
 require_size "$BUILD_DIR/hifi_idle_rate_cave.template.bin" 32
@@ -126,6 +150,11 @@ require_size "$BUILD_DIR/a16_native_hifi_route.template.bin" 640
 require_size "$BUILD_DIR/a16_hifi_dynamic_default.template.bin" 86
 require_size "$BUILD_DIR/a16_qti_hifi_reconfigure.template.bin" 16
 require_size "$BUILD_DIR/a16_pudding_sampling_rate_handler.template.bin" 256
+require_size "$BUILD_DIR/a16_dada_rate_parameter.template.bin" 256
+require_size "$BUILD_DIR/a16_dada_rate_worker.template.bin" 128
+python3 "$ROOT_DIR/tests/dada_payload_binary_contract.py" \
+    "$BUILD_DIR/a16_dada_rate_parameter.template.bin" \
+    "$BUILD_DIR/a16_dada_rate_worker.template.bin"
 grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.template.bin"
@@ -140,8 +169,10 @@ python3 "$ROOT_DIR/tests/native_hifi_select_model.py"
 python3 "$ROOT_DIR/tests/usb_output_gate_model.py"
 python3 "$ROOT_DIR/tests/hifi_dynamic_default_model.py"
 python3 "$ROOT_DIR/tests/hifi_idle_rate_model.py"
+python3 "$ROOT_DIR/tests/dada_rate_handoff_model.py"
 bash "$ROOT_DIR/tests/fresh_install_state_model.sh"
 bash "$ROOT_DIR/tests/theoretical_confirmation_model.sh"
+bash "$ROOT_DIR/tests/android16_target_selection_model.sh"
 
 "${CXX:-c++}" -std=c++17 -O2 -Wall -Wextra -Werror \
     "$ROOT_DIR/tools/elfpatcher/main.cpp" -o "$BUILD_DIR/elfpatcher-host"
@@ -168,7 +199,7 @@ cp "$BUILD_DIR/elfpatcher" "$MODULE_STAGE/bin/elfpatcher"
 cp -a "$ROOT_DIR/targets" "$MODULE_STAGE/targets"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.8.2-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.8.3-alpha$' "$MODULE_STAGE/module.prop"
 grep -q '^TARGET_INSTALLABLE=1$' \
     "$MODULE_STAGE/targets/android-16/target.conf"
 grep -q '^TARGET_VALIDATION_TYPE=theoretical$' \
@@ -176,6 +207,8 @@ grep -q '^TARGET_VALIDATION_TYPE=theoretical$' \
 grep -q '^TARGET_INSTALLABLE=1$' \
     "$MODULE_STAGE/targets/android-17/target.conf"
 test -r "$MODULE_STAGE/targets/android-16/baselines/nezha-sm8850-canoe.conf"
+test -r "$MODULE_STAGE/targets/android-16/baselines/dada-sm8750-sun.conf"
+test -r "$MODULE_STAGE/targets/android-16/baselines/pandora-sm8850-canoe.conf"
 test -r "$MODULE_STAGE/targets/android-17/baselines/nezha-sm8850-canoe.conf"
 grep -q 'patch_source_for' "$MODULE_STAGE/customize.sh"
 grep -q 'In-place upgrades are intentionally unsupported' \
@@ -219,7 +252,13 @@ unzip -t "$ROOT_DIR/dist/$OUTPUT_NAME"
 cat "$ROOT_DIR/dist/$OUTPUT_NAME.sha256"
 
 if [[ -n ${ANDROID16_AUDIO_ROOT:-} ]]; then
-    bash "$ROOT_DIR/scripts/validate_offline_target.sh" 16 \
-        "$ANDROID16_AUDIO_ROOT" "$ROOT_DIR/dist/$OUTPUT_NAME" \
+    validation_args=(
+        16 "$ANDROID16_AUDIO_ROOT" "$ROOT_DIR/dist/$OUTPUT_NAME"
         "$BUILD_DIR/elfpatcher-host"
+    )
+    if [[ -n ${ANDROID16_BASELINE:-} ]]; then
+        validation_args+=("$ANDROID16_BASELINE")
+    fi
+    bash "$ROOT_DIR/scripts/validate_offline_target.sh" \
+        "${validation_args[@]}"
 fi

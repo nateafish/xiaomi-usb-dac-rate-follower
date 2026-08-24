@@ -6,8 +6,13 @@
 . "$TARGET_DIR/usecases/usb-441-rate-table.conf"
 . "$TARGET_DIR/usecases/qti-hifi-reconfigure.conf"
 . "$TARGET_DIR/usecases/pudding-sampling-rate-handler.conf"
+. "$TARGET_DIR/usecases/dada-sampling-rate-handler.conf"
 . "$MODPATH/patches/a16_native_hifi_route.relocations.conf" \
     || abort "! Missing Android 16 native HIFI relocation manifest"
+. "$MODPATH/patches/a16_dada_rate_parameter.relocations.conf" \
+    || abort "! Missing Xiaomi 15 parameter relocation manifest"
+. "$MODPATH/patches/a16_dada_rate_worker.relocations.conf" \
+    || abort "! Missing Xiaomi 15 worker relocation manifest"
 . "$MODPATH/lib/elf-runtime.sh"
 
 apply_target_patches() {
@@ -96,7 +101,13 @@ apply_target_patches() {
     fi
 
     HAL_PATCH_KIND=
-    if qti_match=$($ELFPATCHER find "$HAL_DEST" exec \
+    if dada_match=$($ELFPATCHER find "$HAL_DEST" \
+            "symbol:$DADA_RATE_FUNCTION" "$DADA_RATE_CONTEXT" 2>/dev/null) \
+            && dada_worker_match=$($ELFPATCHER find "$HAL_DEST" \
+                "symbol:$DADA_TRANSFER_FUNCTION" \
+                "$DADA_WORKER_CONTEXT" 2>/dev/null); then
+        HAL_PATCH_KIND=dada-worker-rate-handler
+    elif qti_match=$($ELFPATCHER find "$HAL_DEST" exec \
             "$QTI_RECONFIG_CONTEXT" 2>/dev/null); then
         qti_state=stock
         HAL_PATCH_KIND=nezha-usecase-guard
@@ -109,10 +120,108 @@ apply_target_patches() {
             "$PUDDING_RATE_CONTEXT" 2>/dev/null); then
         HAL_PATCH_KIND=pudding-rate-handler
     else
-        abort "! Android 16 Qualcomm HAL is neither a supported Nezha nor Pudding layout"
+        abort "! Android 16 Qualcomm HAL is not a supported Dada, Nezha or Pudding layout"
     fi
 
-    if [ "$HAL_PATCH_KIND" = nezha-usecase-guard ]; then
+    case "${BASELINE_PATCH_PROFILE:-}:$HAL_PATCH_KIND" in
+        policy-hifi-with-dada-worker-rate-handler:dada-worker-rate-handler|\
+        policy-hifi-with-pudding-rate-handler:pudding-rate-handler|\
+        native-hifi-usecase-guard:nezha-usecase-guard|'':*) ;;
+        *) abort "! Recorded patch profile does not match the Qualcomm HAL layout" ;;
+    esac
+
+    if [ "$HAL_PATCH_KIND" = dada-worker-rate-handler ]; then
+        ep_find "$HAL_DEST" "symbol:$DADA_CONFIGURE_FUNCTION" \
+            "$DADA_PLATFORM_CONFIG_LAYOUT" \
+            'Dada Platform/AudioPortConfig pointer layout' >/dev/null \
+            || abort "! Dada Platform/AudioPortConfig layout is incompatible"
+        ep_find "$HAL_DEST" "symbol:$DADA_RATE_FUNCTION" \
+            "$DADA_CACHED_ATTR_LAYOUT" \
+            'Dada cached PAL-attribute layout' >/dev/null \
+            || abort "! Dada cached PAL-attribute layout is incompatible"
+        ep_find "$HAL_DEST" \
+            'symbol:_ZN3qti5audio4core16StreamOutPrimary7standbyEv' \
+            "$DADA_USECASE_HANDLE_LAYOUT" \
+            'Dada usecase/PAL-handle layout' >/dev/null \
+            || abort "! Dada usecase/PAL-handle layout is incompatible"
+        ep_find "$HAL_DEST" "symbol:$DADA_PLATFORM_RATE_FUNCTION" \
+            "$DADA_SAMPLE_RATE_LAYOUT" \
+            'Dada AudioPortConfig sample-rate layout' >/dev/null \
+            || abort "! Dada AudioPortConfig sample-rate layout is incompatible"
+        ep_find "$HAL_DEST" "symbol:$DADA_PLATFORM_RATE_FUNCTION" \
+            "$DADA_PAL_RATE_LAYOUT" \
+            'Dada PAL sample-rate layout' >/dev/null \
+            || abort "! Dada PAL sample-rate layout is incompatible"
+
+        DADA_RATE_SITE=$(offset_add "$dada_match" "$DADA_RATE_SITE_DELTA")
+        DADA_WORKER_SITE=$(offset_add "$dada_worker_match" \
+            "$DADA_WORKER_SITE_DELTA")
+        dada_cave_anchor=$(ep_find "$HAL_DEST" exec "$DADA_CAVE_ANCHOR" \
+            'Dada linker-gap owner') \
+            || abort "! Cannot resolve the Dada executable-gap owner"
+        DADA_CAVE_BASE=$(offset_add "$dada_cave_anchor" \
+            "$DADA_CAVE_ANCHOR_SIZE")
+        DADA_PARAMETER_CAVE=$(offset_add "$DADA_CAVE_BASE" \
+            "$DADA_PARAMETER_CAVE_DELTA")
+        DADA_WORKER_CAVE=$(offset_add "$DADA_CAVE_BASE" \
+            "$DADA_WORKER_CAVE_DELTA")
+        DADA_CAVE_OWNER=$(ep_plt "$HAL_DEST" "$DADA_CAVE_OWNER_PLT" \
+            'Dada linker-gap owner call') \
+            || abort "! Cannot resolve the Dada linker-gap owner call"
+        branch_points_to "$HAL_DEST" \
+            "$(offset_add "$dada_cave_anchor" \
+                "$DADA_CAVE_OWNER_CALL_DELTA")" "$DADA_CAVE_OWNER" \
+            || abort "! Dada executable gap is not owned by the expected function"
+
+        dada_rate_stock=0
+        dada_worker_stock=0
+        hex_at "$HAL_DEST" "$DADA_RATE_SITE" "$DADA_RATE_STOCK" \
+            && dada_rate_stock=1
+        hex_at "$HAL_DEST" "$DADA_WORKER_SITE" "$DADA_WORKER_STOCK" \
+            && dada_worker_stock=1
+        if [ "$dada_rate_stock:$dada_worker_stock" = 1:1 ]; then
+            resolved_dada_cave=$(ep_cave_after "$HAL_DEST" \
+                "$dada_cave_anchor" "$DADA_CAVE_ANCHOR_SIZE" \
+                "$DADA_CAVE_REQUIRED_SIZE" "$DADA_CAVE_ALIGNMENT" \
+                'Dada sampling_rate executable cave') \
+                || abort "! Cannot allocate the Dada sampling_rate cave"
+            [ $(( resolved_dada_cave )) -eq $(( DADA_CAVE_BASE )) ] \
+                || abort "! Dada linker-gap geometry changed unexpectedly"
+        elif branch_points_to "$HAL_DEST" "$DADA_RATE_SITE" \
+                "$DADA_PARAMETER_CAVE" \
+                && branch_points_to "$HAL_DEST" "$DADA_WORKER_SITE" \
+                    "$DADA_WORKER_CAVE"; then
+            :
+        else
+            abort "! Unknown or mixed Xiaomi 15 sampling_rate hook state"
+        fi
+
+        DADA_STR_PARMS_GET_STR=$(ep_plt "$HAL_DEST" \
+            "$DADA_STR_PARMS_GET_STR_PLT" 'Dada str_parms_get_str') \
+            || abort "! Cannot resolve Dada str_parms_get_str"
+        DADA_ATOI=$(ep_plt "$HAL_DEST" "$DADA_ATOI_PLT" 'Dada atoi') \
+            || abort "! Cannot resolve Dada atoi"
+        DADA_STANDBY=$(ep_symbol "$HAL_DEST" "$DADA_STANDBY_SYMBOL" \
+            'Dada worker standby') || abort "! Cannot resolve Dada standby"
+
+        $ELFPATCHER inject "$HAL_DEST" "$DADA_PARAMETER_CAVE" \
+            "$MODPATH/patches/a16_dada_rate_parameter.template.bin" \
+            "${A16_DADA_RATE_PARAMETER_DADA_STR_PARMS_GET_STR}:$DADA_STR_PARMS_GET_STR" \
+            "${A16_DADA_RATE_PARAMETER_DADA_ATOI}:$DADA_ATOI" \
+            "${A16_DADA_RATE_PARAMETER_DADA_RATE_RETURN}:$(offset_add "$DADA_RATE_SITE" 4)" \
+            || abort "! Dada sampling_rate parameter injection failed"
+        $ELFPATCHER inject "$HAL_DEST" "$DADA_WORKER_CAVE" \
+            "$MODPATH/patches/a16_dada_rate_worker.template.bin" \
+            "${A16_DADA_RATE_WORKER_DADA_STANDBY}:$DADA_STANDBY" \
+            "${A16_DADA_RATE_WORKER_DADA_WORKER_RETURN}:$(offset_add "$DADA_WORKER_SITE" 4)" \
+            || abort "! Dada sampling_rate worker injection failed"
+        $ELFPATCHER branch "$HAL_DEST" "$DADA_RATE_SITE" \
+            "$DADA_PARAMETER_CAVE" B \
+            || abort "! Dada sampling_rate parameter hook failed"
+        $ELFPATCHER branch "$HAL_DEST" "$DADA_WORKER_SITE" \
+            "$DADA_WORKER_CAVE" B \
+            || abort "! Dada sampling_rate worker hook failed"
+    elif [ "$HAL_PATCH_KIND" = nezha-usecase-guard ]; then
         QTI_SITE=$(offset_add "$qti_match" "$QTI_RECONFIG_SITE_DELTA")
         if [ "$qti_state" = stock ]; then
             QTI_SKIP=$(branch_target "$HAL_DEST" "$(offset_add "$QTI_SITE" 4)") \
@@ -220,7 +329,14 @@ apply_target_patches() {
     $ELFPATCHER find "$USB_DEST" "$usb_domain" "$USB_RATE_PATCHED" \
         >/dev/null || abort "! Android 16 Qualcomm USB verification failed"
 
-    if [ "$HAL_PATCH_KIND" = pudding-rate-handler ]; then
+    if [ "$HAL_PATCH_KIND" = dada-worker-rate-handler ]; then
+        branch_points_to "$HAL_DEST" "$DADA_RATE_SITE" \
+            "$DADA_PARAMETER_CAVE" \
+            || abort "! Dada sampling_rate parameter verification failed"
+        branch_points_to "$HAL_DEST" "$DADA_WORKER_SITE" \
+            "$DADA_WORKER_CAVE" \
+            || abort "! Dada sampling_rate worker verification failed"
+    elif [ "$HAL_PATCH_KIND" = pudding-rate-handler ]; then
         branch_points_to "$HAL_DEST" "$PUDDING_RATE_SITE" \
             "$PUDDING_CAVE_BASE" \
             || abort "! Pudding sampling_rate hook verification failed"
@@ -230,7 +346,9 @@ apply_target_patches() {
         'USB rate table') || abort "! Cannot resolve Android 16 USB rate table"
     ui_print "- Offline Android 16 map: policy=$SELECT_SITE cave=$CAVE_BASE"
     ui_print "- Offline Android 16 map: mixer=$MIXER_SITE USB-table=$USB_TABLE_SITE"
-    if [ "$HAL_PATCH_KIND" = nezha-usecase-guard ]; then
+    if [ "$HAL_PATCH_KIND" = dada-worker-rate-handler ]; then
+        ui_print "- Offline Android 16 map: Dada-HAL parameter=$DADA_RATE_SITE worker=$DADA_WORKER_SITE cave=$DADA_CAVE_BASE"
+    elif [ "$HAL_PATCH_KIND" = nezha-usecase-guard ]; then
         ui_print "- Offline Android 16 map: Qualcomm-HAL=$QTI_SITE"
     else
         ui_print "- Offline Android 16 map: Pudding-HAL=$PUDDING_RATE_SITE cave=$PUDDING_CAVE_BASE"

@@ -1,6 +1,6 @@
 # Controlled test plan
 
-`0.8.2-alpha` must pass offline verification before any device installation.
+`0.8.3-alpha` must pass offline verification before any device installation.
 Do not live-replace audio libraries or restart audioserver manually.
 
 ## Offline gate
@@ -16,7 +16,8 @@ The build must confirm:
 - all routing and final transport-gate fail-closed cases, including bounded
   output and device collections.
 
-The private firmware check is:
+The fixed-offset private firmware check below is retained only for the
+hardware-verified Android 17 baseline:
 
 ```sh
 python3 tests/verify_firmware_patch.py \
@@ -26,7 +27,16 @@ python3 tests/verify_firmware_patch.py \
   libaudiocorehal.qti.so \
   libaudiopolicycomponents.so \
   libaudiopolicymanagerimpl.so \
-  dist/xiaomi-usb-dac-rate-follower-v0.8.2-alpha.zip
+  dist/xiaomi-usb-dac-rate-follower-v0.8.3-alpha.zip
+```
+
+For Xiaomi 15, use the semantic baseline validator instead; its USB target is
+resolved to `libar-pal.so` by the baseline:
+
+```sh
+bash scripts/validate_offline_target.sh 16 port \
+  dist/xiaomi-usb-dac-rate-follower-v0.8.3-alpha.zip \
+  /path/to/elfpatcher-host dada-sm8750-sun.conf
 ```
 
 ## Installation gate

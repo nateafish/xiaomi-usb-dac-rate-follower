@@ -14,7 +14,9 @@
 | Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **实机验证** | 可安装 | 原生 HIFI 修复 |
 | Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | 原生 HIFI 移植 |
 | Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
+| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | Pudding-family AIDL HAL 移植 |
 | Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
+| Xiaomi 15 | `dada` | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v2 / PAL 工作线程移植 |
 
 “实机验证”表示已在设备、USB DAC 和实际播放器上测试；“理论适配”表示已从
 完整 OTA 提取目标库，并通过语义注入、分支重定位和两次应用幂等验证，但没有
@@ -32,7 +34,8 @@
 
 扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。其他 Qualcomm Android 17
 AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一代码签名、对象布局
-和补丁空间全部吻合时才允许继续；指纹和整库哈希仅用于诊断。
+和补丁空间全部吻合时才允许继续。指纹、Build ID 和整库哈希只用于诊断，不代替
+结构检查，也不单独阻止兼容 OTA。
 
 ### 特性
 
@@ -75,9 +78,9 @@ AIDL/HIDL 世代和接口版本，`usecases/` 保存对应的修改方案。安�
 AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写入地址。
 
 未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示警告，然后执行相同的
-结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。三个 Android 16
-基线已通过 OTA 库的离线注入和两次应用幂等验证，现允许在确认“尚未实机验证”
-警告后安装；该提示不代表稳定性或严格 Bit Perfect 已经得到验证。
+结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。五个 Android 16
+基线均已通过 OTA 库的离线注入和两次应用幂等验证，且允许在确认“尚未实机验证”
+后安装。
 
 ### 适配其他设备
 
@@ -109,7 +112,7 @@ bash scripts/collect_device_port.sh
 - `libaudioflinger.so`
 - `libaudiopolicymanagerimpl.so` 及同目录的 stub/接口库
 - `libaudioclient.so`、`libaudiopolicyservice.so`（如果存在）
-- `libdev_usb.so`
+- 当前 USB/PAL 实现，例如 `libdev_usb.so` 或 `libar-pal.so`
 - `libaudioplatformconverter.qti.so`（如果存在）
 - 当前 Qualcomm Audio HAL：`libaudiocorehal.qti.so`、`libaudiocorehal.default.so`
   或同类 `audio.*` / `android.hardware.audio*` 库
@@ -168,7 +171,9 @@ can follow tracks between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 | Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **Hardware verified** | Installable | Native HIFI fix |
 | Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)** | Installable with warning | Native HIFI port |
 | Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL HAL port |
+| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **Theoretical (offline OTA)** | Installable with warning | Pudding-family AIDL HAL port |
 | Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL HAL port |
+| Xiaomi 15 | `dada` | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **Theoretical (offline OTA)** | Installable with warning | AIDL v2 / PAL worker port |
 
 “Hardware verified” means testing on the device with a USB DAC and real
 players. “Theoretical” means the complete OTA was extracted and passed
@@ -191,8 +196,8 @@ metamodule.
 Speaker, Bluetooth, analogue and mixed routes are left untouched. Other
 Qualcomm Android 17 AIDL audio baselines receive an unverified warning and may
 continue only when the ELF architecture, unique code signatures, object
-layouts and executable patch space all match. Fingerprints and whole-file
-hashes are diagnostic only.
+layouts and executable patch space all match. Fingerprints, Build IDs and
+whole-file hashes remain diagnostic and do not replace the structural gates.
 
 ### Features
 
@@ -242,10 +247,10 @@ used as write addresses.
 
 An unrecorded Qualcomm device receives a prominent warning before the same
 structural checks run. Zero or multiple matches, unknown layouts and mixed
-patch states abort. All three Android 16 baselines passed offline injection and
-two-pass idempotence checks against extracted OTA libraries. Installation is
-now allowed after acknowledging that hardware validation is still missing;
-this does not certify runtime stability or strict bit-perfect output.
+patch states abort. All five Android 16 baselines passed offline injection and
+two-pass idempotence checks against extracted OTA libraries and are enabled
+after acknowledging that hardware validation is missing. None of this
+certifies runtime stability or strict bit-perfect output.
 
 ### Porting requests
 
@@ -258,7 +263,7 @@ personal information before attaching it to an Issue.
 
 The archive must include the stock versions of the libraries at their original
 paths. The current patch targets are `libaudiopolicymanagerdefault.so`,
-`libaudioflinger.so`, `libdev_usb.so`, and the Qualcomm Audio HAL. The policy
+`libaudioflinger.so`, the active USB/PAL implementation, and the Qualcomm Audio HAL. The policy
 components and Xiaomi policy implementation libraries are required for layout
 analysis even though this module does not overwrite them. For a HIDL device,
 also include every existing `audio.primary*.so`, `audio.usb*.so`,

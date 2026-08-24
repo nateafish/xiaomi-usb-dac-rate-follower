@@ -1,5 +1,7 @@
 /build/
 /dist/
+/port/
+/port-pandora/
 *.class
 *.jar
 .DS_Store

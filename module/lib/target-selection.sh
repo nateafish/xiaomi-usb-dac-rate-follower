@@ -16,7 +16,7 @@ is_qualcomm_platform() {
     hardware=$(getprop ro.boot.hardware)
     platform=$(getprop ro.board.platform)
     case "$manufacturer:$hardware:$platform" in
-        QTI:*:*|Qualcomm:*:*|*:qcom:*|*:*:canoe|*:*:kalama|*:*:pineapple) return 0 ;;
+        QTI:*:*|Qualcomm:*:*|*:qcom:*|*:*:canoe|*:*:kalama|*:*:pineapple|*:*:sun) return 0 ;;
     esac
     grep -R -q 'vendor/qcom\|libaudiocorehal\.qti\|audiohalservice\.qti' \
         /vendor/etc/vintf /odm/etc/vintf /vendor/etc/init /odm/etc/init \
@@ -90,10 +90,16 @@ select_audio_target() {
     [ "$actual_hal" = "$TARGET_HAL_GENERATION" ] \
         || abort "! Audio HAL generation is $actual_hal, expected $TARGET_HAL_GENERATION"
 
-    if [ -n "${TARGET_REQUIRED_AIDL_CORE_MAJOR:-}" ]; then
+    if [ "$actual_hal" = aidl ]; then
         actual_aidl_major=$(detect_audio_core_aidl_major)
-        [ "$actual_aidl_major" = "$TARGET_REQUIRED_AIDL_CORE_MAJOR" ] \
-            || abort "! Audio Core AIDL is v${actual_aidl_major:-unknown}, expected v$TARGET_REQUIRED_AIDL_CORE_MAJOR"
+        supported_aidl_majors=${TARGET_SUPPORTED_AIDL_CORE_MAJORS:-${TARGET_REQUIRED_AIDL_CORE_MAJOR:-}}
+        aidl_major_supported=0
+        for supported_aidl_major in $supported_aidl_majors; do
+            [ "$actual_aidl_major" = "$supported_aidl_major" ] \
+                && aidl_major_supported=1
+        done
+        [ "$aidl_major_supported" = 1 ] \
+            || abort "! Audio Core AIDL is v${actual_aidl_major:-unknown}, supported: ${supported_aidl_majors:-none}"
     fi
 
     device=$(getprop ro.product.device)
@@ -120,7 +126,7 @@ select_audio_target() {
         . "$matched_baseline" || abort "! Cannot load recorded device baseline"
         [ "$BASELINE_HAL_GENERATION" = "$actual_hal" ] \
             || abort "! Recorded baseline HAL generation is inconsistent"
-        if [ -n "${TARGET_REQUIRED_AIDL_CORE_MAJOR:-}" ]; then
+        if [ "$actual_hal" = aidl ]; then
             [ "$BASELINE_AUDIO_CORE_MAJOR" = "$actual_aidl_major" ] \
                 || abort "! Recorded baseline Audio Core version is inconsistent"
         fi
@@ -133,6 +139,12 @@ select_audio_target() {
             abort "! $BASELINE_ID is retained for research, not installation"
         fi
     else
+        for recorded_aidl_major in ${TARGET_REQUIRE_RECORDED_AIDL_CORE_MAJORS:-}; do
+            if [ "$actual_hal" = aidl ] \
+                    && [ "$actual_aidl_major" = "$recorded_aidl_major" ]; then
+                abort "! Audio Core AIDL v$actual_aidl_major requires an exact recorded device baseline"
+            fi
+        done
         [ "${COMPAT_ALLOW_UNVERIFIED:-0}" = 1 ] \
             || abort "! This device/SoC tuple is not enabled"
         ui_print "! WARNING: this device/SoC tuple has not been tested"
@@ -141,15 +153,22 @@ select_audio_target() {
         ui_print "! Confirm USB DAC rates and audio stability yourself after reboot"
     fi
 
+    # A recorded device may move vendor implementations without changing the
+    # common Android target.  Apply only explicit per-baseline path overrides.
+    USB_PATH=${BASELINE_USB_PATH:-$USB_PATH}
+    CORE_HAL_PATH=${BASELINE_CORE_HAL_PATH:-$CORE_HAL_PATH}
+
     if [ "${TARGET_INSTALLABLE:-0}" != 1 ]; then
         ui_print "! Target status: ${TARGET_STATUS:-unknown}"
         ui_print "! Its use cases are retained for offline porting, not device installation"
         abort "! $TARGET_ID is not enabled for installation yet"
     fi
     validation_type=${BASELINE_VALIDATION_TYPE:-${TARGET_VALIDATION_TYPE:-}}
-    if [ "$validation_type" = theoretical ]; then
-        confirm_theoretical_installation
-    fi
+    case "$validation_type" in
+        hardware) ;;
+        theoretical|'') confirm_theoretical_installation ;;
+        *) abort "! Unknown target validation type: $validation_type" ;;
+    esac
     ui_print "- Selected target: $TARGET_ID (${TARGET_STATUS:-unknown})"
 }
 

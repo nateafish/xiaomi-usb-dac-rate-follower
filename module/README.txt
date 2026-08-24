@@ -1,4 +1,4 @@
-Xiaomi USB DAC Rate Follower v0.8.2-alpha
+Xiaomi USB DAC Rate Follower v0.8.3-alpha
 
 Experimental module verified on Xiaomi 17 Ultra Android 17 firmware
 OS4.0.0.15.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
@@ -30,7 +30,9 @@ aborts on unsupported or mixed patch states.
 Patch locations, imported calls and AArch64 branch targets are resolved from
 the installed ELF at runtime. Recorded research offsets are not write gates.
 The bundled Android 16 use cases are offline-validated and installable after
-the user acknowledges the missing hardware validation with a volume key.
+the hardware-validation warning is acknowledged with a volume key. Xiaomi 15
+(`dada`) uses AIDL v2 and `libar-pal.so`; its PAL teardown is deferred to the
+stock audio worker thread.
 
 In-place upgrades are intentionally unsupported during the private alpha
 phase. Delete the installed module and reboot before installing another build.

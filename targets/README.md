@@ -7,9 +7,9 @@ AudioFlinger/HAL generation, and the use cases required by that baseline.
 Each Android directory contains shared `usecases/` plus compact `baselines/`
 records. A baseline is one exact device / SoC / board tuple, so adding another
 device cannot accidentally create a cross-product match with existing lists.
-Each exact baseline also has its own installation status. A recorded port that
+Each exact baseline also has its own validation status. A recorded port that
 has passed offline structural validation but not hardware validation remains
-visible for research while the installer blocks it before staging any files.
+installable only after a prominent warning and physical volume-key confirmation.
 `target.conf` defines two support tiers:
 
 - `verified`: a recorded Android major version, device and SoC/HAL baseline.
@@ -18,10 +18,9 @@ visible for research while the installer blocks it before staging any files.
   object-layout anchors and executable caves all match.
 
 A compatible match may be installed with an explicit unverified-device
-warning. Firmware incrementals and ELF Build IDs are retained as diagnostic
-references, not equality gates. A device name, fingerprint, file hash or
-fixed offset never makes a compatible target safe by itself. Zero matches,
-multiple matches, an unknown layout, or a mixed patch state must abort.
+warning. Firmware incrementals, ELF Build IDs and whole-file hashes are
+diagnostic references rather than equality gates. Zero matches, multiple
+matches, an unknown layout, or a mixed patch state must abort.
 
 Matching priority is Android SDK, device, SoC model/board platform, HAL
 generation and interface version, then the actually loaded Qualcomm library
@@ -35,8 +34,8 @@ the sole installation decision.
 The module ZIP carries one runtime patch driver per Android major version.
 Android 17 is installable after all target and semantic checks pass. Android
 16 is `theoretical-preview`: its route, dynamic-default, MixerThread, USB table
-and Qualcomm HAL use cases passed offline OTA validation. The installer warns
-about missing hardware validation and waits for a volume key before applying.
+and Qualcomm HAL use cases passed offline OTA validation. Every baseline that
+lacks hardware validation warns and waits for a volume key before applying.
 
 For offline validation, build a host copy of `tools/elfpatcher`, build the
 module ZIP, then run:
@@ -45,8 +44,11 @@ module ZIP, then run:
 bash scripts/validate_offline_target.sh \
   16 /path/to/extracted/audio-targets \
   dist/xiaomi-usb-dac-rate-follower-*.zip \
-  /path/to/elfpatcher-host
+  /path/to/elfpatcher-host \
+  dada-sm8750-sun.conf
 ```
 
-The validator patches copies only and runs the target driver twice. The
-second pass must be byte-identical to the first.
+The optional baseline argument applies its exact library paths and patch
+profile. The validator patches copies only and runs the target driver twice.
+The second pass must be byte-identical to the first, and Dada validation also
+proves that a deliberately mixed pair of HAL hooks is rejected.

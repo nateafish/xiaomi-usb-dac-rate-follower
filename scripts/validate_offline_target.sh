@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 4 ]]; then
-    echo "usage: $0 ANDROID_MAJOR EXTRACTED_ROOT MODULE_ZIP HOST_ELFPATCHER" >&2
+if [[ $# -lt 4 || $# -gt 5 ]]; then
+    echo "usage: $0 ANDROID_MAJOR EXTRACTED_ROOT MODULE_ZIP HOST_ELFPATCHER [BASELINE_CONF]" >&2
     exit 2
 fi
 
@@ -27,6 +27,19 @@ TARGET_SOURCE=$ROOT_DIR/targets/android-$ANDROID_MAJOR/target.conf
 }
 
 source "$TARGET_SOURCE"
+if [[ -n ${5:-} ]]; then
+    BASELINE_SOURCE=$5
+    if [[ ! -r "$BASELINE_SOURCE" ]]; then
+        BASELINE_SOURCE=$ROOT_DIR/targets/android-$ANDROID_MAJOR/baselines/$5
+    fi
+    [[ -r "$BASELINE_SOURCE" ]] || {
+        echo "missing baseline manifest: $5" >&2
+        exit 1
+    }
+    source "$BASELINE_SOURCE"
+    USB_PATH=${BASELINE_USB_PATH:-$USB_PATH}
+    CORE_HAL_PATH=${BASELINE_CORE_HAL_PATH:-$CORE_HAL_PATH}
+fi
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/rate-follower-target.XXXXXX")
 if [[ ${KEEP_WORK:-0} != 1 ]]; then
     trap 'rm -rf "$WORK_DIR"' EXIT
@@ -38,31 +51,44 @@ mkdir -p "$MODPATH" "$WORK_DIR/work"
 unzip -q "$MODULE_ZIP" -d "$MODPATH"
 
 copy_target() {
-    local source_path=$1 destination=$2
-    [[ -r "$EXTRACTED_ROOT$source_path" ]] || {
+    local source_path=$1 destination=$2 resolved
+    resolved=$(resolve_extracted_path "$source_path") || {
         echo "missing extracted file: $EXTRACTED_ROOT$source_path" >&2
         exit 1
     }
-    cp -p "$EXTRACTED_ROOT$source_path" "$destination"
+    cp -p "$resolved" "$destination"
+}
+
+resolve_extracted_path() {
+    local source_path=$1 candidate
+    for candidate in "$EXTRACTED_ROOT$source_path" \
+            "$EXTRACTED_ROOT/system$source_path"; do
+        if [[ -r "$candidate" ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
 }
 
 POLICY_DEST=$WORK_DIR/work/policy.so
 FLINGER_DEST=$WORK_DIR/work/flinger.so
 USB_DEST=$WORK_DIR/work/usb.so
 HAL_DEST=$WORK_DIR/work/hal.so
-COMPONENTS_SOURCE=$EXTRACTED_ROOT$COMPONENTS_PATH
-IMPL_SOURCE=$EXTRACTED_ROOT$POLICY_IMPL_PATH
+COMPONENTS_SOURCE=$(resolve_extracted_path "$COMPONENTS_PATH") || {
+    echo "missing policy components under $EXTRACTED_ROOT" >&2
+    exit 1
+}
+IMPL_SOURCE=$(resolve_extracted_path "$POLICY_IMPL_PATH") || {
+    echo "missing policy implementation under $EXTRACTED_ROOT" >&2
+    exit 1
+}
 ELFPATCHER=$HOST_ELFPATCHER
 
 copy_target "$POLICY_PATH" "$POLICY_DEST"
 copy_target "$FLINGER_PATH" "$FLINGER_DEST"
 copy_target "$USB_PATH" "$USB_DEST"
 copy_target "$CORE_HAL_PATH" "$HAL_DEST"
-[[ -r "$COMPONENTS_SOURCE" && -r "$IMPL_SOURCE" ]] || {
-    echo "missing policy layout libraries under $EXTRACTED_ROOT" >&2
-    exit 1
-}
-
 ui_print() {
     echo "$*"
 }
@@ -83,7 +109,21 @@ second_hashes=$(sha256sum "$WORK_DIR/work"/*.so)
     exit 1
 }
 
-echo "offline target validation: PASS ($TARGET_ID)"
+if [[ ${HAL_PATCH_KIND:-} == dada-worker-rate-handler ]]; then
+    mixed_hal=$WORK_DIR/work/hal-mixed.so
+    cp -p "$HAL_DEST" "$mixed_hal"
+    "$ELFPATCHER" branch "$mixed_hal" "$DADA_WORKER_SITE" \
+        "$((DADA_WORKER_SITE + 4))" B
+    if (
+        HAL_DEST=$mixed_hal
+        apply_target_patches
+    ) >/dev/null 2>&1; then
+        echo "Dada mixed hook state was not rejected" >&2
+        exit 1
+    fi
+fi
+
+echo "offline target validation: PASS ($TARGET_ID${BASELINE_ID:+ / $BASELINE_ID})"
 echo "$second_hashes"
 if [[ ${KEEP_WORK:-0} == 1 ]]; then
     echo "kept patched files at: $WORK_DIR"
