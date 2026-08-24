@@ -17,6 +17,9 @@
 .p2align 2
 .global a16_pudding_sampling_rate_handler
 a16_pudding_sampling_rate_handler:
+    // HifiSampleRateManager remains the only rate arbiter.  This hook restores
+    // the HAL consumer that exists in the Android 16 Nezha reference; it does
+    // not reuse the separate FIRST_LOCK deep_buffer_out policy profile.
     // The displaced instruction was `mov x0, x23`.  The stock CBZ immediately
     // before the hook guarantees that x23 is a live str_parms object here.
     mov     x0, x23
@@ -86,12 +89,14 @@ a16_pudding_sampling_rate_handler:
 .p2align 2
     .space  256 - (. - a16_pudding_sampling_rate_handler)
 
-// Android 16 has no mutex shared by the parameter path and usecase-3 PAL
-// writes.  Reconfiguration therefore runs at the head of Xiaomi's transfer()
-// worker, before either the ordinary QTI transfer or hyperWrite branch.  This
-// is the same ownership model used by the Dada payload: the Binder thread only
-// records intent; the writer thread performs standby and makes the cache
-// current before stock code continues.
+// The Android 16 Nezha reference handles this request on the Binder thread for
+// usecase 13, but its configure mutex is not held by pal_stream_write().
+// Android 16 has no corresponding two-sided mutex for usecase 3.  Enum-3
+// reconfiguration therefore runs at the head of Xiaomi's transfer() worker,
+// before either the ordinary QTI transfer or hyperWrite branch.  The Binder
+// thread only records the manager's intent; the writer thread performs the
+// same concrete Xiaomi standby and makes the PAL attribute cache current
+// before stock code continues.
 .section .a16_pointer_rate_worker, "ax"
 .p2align 2
 .global a16_pointer_rate_worker
