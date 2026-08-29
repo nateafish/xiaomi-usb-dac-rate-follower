@@ -2,28 +2,26 @@
 
 ## 中文
 
-面向 Xiaomi / Redmi Qualcomm AIDL 音频栈的 USB DAC 自适应采样率模块。
-当前实机目标为 Xiaomi 17 Ultra Android 17；指定播放器通过系统原生
-`hifi_playback` 路径输出，采样率可随音轨在 44.1、48、88.2、96、176.4、
-192 和 384 kHz 之间切换。
+面向 Xiaomi / Redmi Qualcomm AIDL 音频栈的 Magisk / KernelSU USB DAC 自适应采样率模块。当前实机目标为 Xiaomi 17 Ultra Android 17；指定播放器通过系统原生 `hifi_playback` 路径输出，采样率可随音轨在 44.1、48、88.2、96、176.4、192 和 384 kHz 之间切换。
 
 ### 适配范围
 
 | 机型 | 代号 | 系统 / 固件基线 | 验证状态 | 模块状态 | 适配类型 |
 | --- | --- | --- | --- | --- | --- |
-| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM` | **实机验证** | 可安装 | 原生 HIFI 修复 |
-| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | 原生 HIFI 移植 |
-| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
-| Xiaomi 17 Max | `byron` | Android 16 / API 36<br>`OS3.0.308.0.WAFCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
-| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
-| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL HAL 移植 |
+| Xiaomi 17 Ultra | `nezha` | Android 17 / API 37<br>`OS4.0.0.15 / OS4.0.0.17.XPACNXM` | **实机验证** | 可安装 | AIDL v3 / 原生 HIFI 修复 |
+| Xiaomi 17 Ultra | `nezha` | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / 原生 HIFI 移植 |
+| Xiaomi 17 | `pudding` | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / HAL 移植 |
+| Xiaomi 17 Max | `byron` | Android 16 / API 36<br>`OS3.0.308.0.WAFCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / HAL 移植 |
+| Xiaomi 17 Pro | `pandora` | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / HAL 移植 |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / HAL 移植 |
 | Redmi K90 Pro Max | `myron` | Android 16 / API 36<br>`OS3.0.308.0.WPMCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v3 / 独立偏移布局移植 |
 | Xiaomi 15 | `dada` | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **理论适配（OTA 离线）** | 可安装（安装时提示） | AIDL v2 / PAL 工作线程移植 |
 
-“实机验证”表示已在设备、USB DAC 和实际播放器上测试；“理论适配”表示已从
-完整 OTA 提取目标库，并通过语义注入、分支重定位和两次应用幂等验证，但没有
-对应实机。理论适配不等于已经确认音频稳定性或严格 Bit Perfect。
-安装理论适配目标时，安装器会显示醒目警告；按任一音量键确认后才会继续。
+“实机验证”表示已在真实设备、USB DAC 和实际播放器上完整测试通过；“理论适配”表示已从官方完整 OTA 提取底层库，通过汇编指令注入、分支重定位计算以及两次应用的幂等性验证（确认补丁逻辑在重复应用时状态收敛且不破坏 ELF 结构），但尚未在物理真机上运行验证。安装理论适配目标时，安装器会显示醒目警告；按任一音量键确认后才会继续。
+
+> 本模块支持 Magisk，或安装了有效 metamodule（如 meta-overlayfs）的 KernelSU。
+
+由于输出路由拦截涉及底层音频策略（`AudioPolicyManager`）的原生机器码注入，播放器包名需在构建期以静态符号表形式固化写入二进制中，因此目前定向指定了以下 4 款播放器：
 
 播放器白名单：
 
@@ -32,12 +30,11 @@
 - QQ 音乐（`com.tencent.qqmusic`）
 - Spotify（`com.spotify.music`）
 
-输出为 USB Audio。Root 支持 Magisk，或带有效 metamodule 的 KernelSU。
+输出仅作用于 **USB Audio（外接 USB DAC）**；扬声器外放、蓝牙耳机、模拟音频以及系统混合通道均不受模块影响。
 
-扬声器、蓝牙、模拟耳机和混合输出不会被模块修改。其他 Qualcomm Android 17
-AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一代码签名、对象布局
-和补丁空间全部吻合时才允许继续。指纹、Build ID 和整库哈希只用于诊断，不代替
-结构检查，也不单独阻止兼容 OTA。
+对于未在列表中明确记录的其他高通 Android 17 设备或后续系统 OTA 更新，安装时会弹出未验证提示。模块不会单纯因为系统版本号或哈希变化就直接报错拦截，安装时动态分析底层系统库的指令签名、内存对象布局以及补丁安全空间；只有在确认各项底层结构完全吻合且能够安全修补时才放行刷入，尽量保障后续 OTA 小版本更新能够直接兼容。
+
+> **警告 / 免责声明**：由于本模块涉及系统音频 HAL 与底层库的二进制修改，使用本模块存在一定风险，可能导致卡第一屏、音频服务反复崩溃无声等不可预测问题。请确保您具备处理相关异常的能力。**使用风险自负**。
 
 ### 特性
 
@@ -51,11 +48,9 @@ AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一�
 
 ### 限制
 
-输出目标：当前实现基于小米原有残留的 Hifi 输出通道，
-而非安卓 14 后提供的 Bit Perfect 通道。
+输出目标：当前实现基于小米原有残留的 Hifi 输出通道；如果其他机型存在 HAL 代码的裁剪行为，需要进行额外的适配。
 
-不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；
-安装器检测到同 ID 的活动或残留模块目录时会直接中止。
+不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；安装器检测到同 ID 的活动或残留模块目录时会直接中止。
 
 模块在安装中注入系统 SO 修改，不保存整套 stock SO。
 
@@ -69,15 +64,9 @@ ANDROID_NDK_HOME=/path/to/android-ndk bash scripts/build.sh
 
 ### 适配说明
 
-仓库按 Android 大版本组织目标。`baselines/` 记录设备、SoC、board platform、
-AIDL/HIDL 世代和接口版本，`usecases/` 保存对应的修改方案。安装器先选择候选方案，
-再用函数局部签名、动态符号、PLT、对象布局和可执行空洞逐项确认。文件位置和
-AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写入地址。
+仓库按 Android 大版本组织目标。`baselines/` 记录设备、SoC、board platform、AIDL/HIDL 世代和接口版本，`usecases/` 保存对应的修改方案。安装器先选择候选方案，再用函数局部签名、动态符号、PLT、对象布局和可执行空洞逐项确认。文件位置和 AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写入地址。
 
-未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示警告，然后执行相同的
-结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。七个 Android 16
-基线均已通过 OTA 库的离线注入和两次应用幂等验证，且允许在确认“尚未实机验证”
-后安装。
+未记录的 Qualcomm 设备在 Android/HAL 基线相符时会显示警告，然后执行相同的结构检查。零命中、多命中、未知布局或混合补丁状态都会中止。部分基线均已通过官方 OTA 库的离线注入与重复修补安全性验证，且允许在确认“尚未实机验证”后安装。
 
 ### 适配其他设备
 
@@ -85,17 +74,13 @@ AArch64 分支在安装时重新计算，研究阶段记录的偏移不作为写
 
 #### 全新适配（尚未安装本模块）
 
-请不要直接安装现有 ZIP。设备必须处于未安装本模块的原厂视图；如果以前安装过，
-请完整卸载并重启。连接设备并获得 root 后，在仓库根目录运行：
+请不要直接安装现有 ZIP。设备必须处于未安装本模块的原厂视图；如果以前安装过，请完整卸载并重启。连接设备并获得 root 后，在仓库根目录运行：
 
 ```sh
 bash scripts/collect_device_port.sh port --capture-transitions
 ```
 
-`port` 会拒绝已安装或待更新的本模块，采集原厂 ELF、配置、服务映射和运行状态。
-`--capture-transitions` 会引导测试 44.1、48、88.2、96、176.4、192、384 kHz，
-再回到 44.1 kHz、停止播放并重新连接 DAC，同时为每一步保存 AudioPolicy、
-AudioFlinger 和 ALSA 快照。如果暂时无法做动态测试，也可以只采集静态基线：
+`port` 会拒绝已安装或待更新的本模块，采集原厂 ELF、配置、服务映射和运行状态。`--capture-transitions` 会引导测试 44.1、48、88.2、96、176.4、192、384 kHz，再回到 44.1 kHz、停止播放并重新连接 DAC，同时为每一步保存 AudioPolicy、AudioFlinger 和 ALSA 快照。如果暂时无法做动态测试，也可以只采集静态基线：
 
 ```sh
 bash scripts/collect_device_port.sh port
@@ -103,37 +88,26 @@ bash scripts/collect_device_port.sh port
 
 #### 已安装后提交问题
 
-如果设备已经安装本模块，需要报告不跟随、无声、卡顿、音频服务崩溃或其他异常，
-请保留故障现场并运行：
+如果设备已经安装本模块，需要报告不跟随、无声、卡顿、音频服务崩溃或其他异常，请保留故障现场并运行：
 
 ```sh
 bash scripts/collect_device_port.sh issue --capture-transitions
 ```
 
-无法完成切换流程时运行 `bash scripts/collect_device_port.sh issue`。`issue` 模式
-会采集已安装模块的版本、状态、覆盖文件、当前生效的目标库、音频状态及崩溃线索；
-它不是原厂基线，不能用于全新适配。
+无法完成切换流程时运行 `bash scripts/collect_device_port.sh issue`。`issue` 模式会采集已安装模块的版本、状态、覆盖文件、当前生效的目标库、音频状态及崩溃线索；它不是原厂基线，不能用于全新适配。
 
-两种模式都只读访问设备，不清空日志，不导出分区镜像、APK、音乐或应用私有目录。
-默认只保留一个 `xiaomi-usb-dac-{port,issue}-*.tar.gz`，不会同时保留同体积的
-解压目录。多设备连接时使用 `--serial SERIAL`；确实需要查看目录时使用
-`--keep-directory`，只要目录而不要压缩包时使用 `--no-archive`。上传前请查看
-压缩包内的 `PRIVACY-REVIEW.txt` 和 `state/collection-warnings.txt`，删除不希望
-公开的信息。以下内容是全新适配所需材料，也可以手工提供。
+两种模式都只读访问设备，不清空日志，不导出分区镜像、APK、音乐或应用私有目录。默认只保留一个 `xiaomi-usb-dac-{port,issue}-*.tar.gz`，不会同时保留同体积的解压目录。多设备连接时使用 `--serial SERIAL`；确实需要查看目录时使用 `--keep-directory`，只要目录而不要压缩包时使用 `--no-archive`。上传前请查看压缩包内的 `PRIVACY-REVIEW.txt` 和 `state/collection-warnings.txt`，删除不希望公开的信息。以下内容是全新适配所需材料，也可以手工提供。
 
 #### 必需的系统信息
 
-- 设备型号、`ro.product.device`、Android 版本、SDK、SoC/平台和完整
-  `ro.build.fingerprint`
+- 设备型号、`ro.product.device`、Android 版本、SDK、SoC/平台和完整 `ro.build.fingerprint`
 - Magisk 或 KernelSU 版本；KernelSU 还要说明 metamodule/overlay 方案
-- 已安装的音频相关模块、音效、厂商增强功能，以及是否启用 Dolby、DTS
-  或其他处理链
+- 已安装的音频相关模块、音效、厂商增强功能，以及是否启用 Dolby、DTS 或其他处理链
 - DAC 型号、USB 连接方式、DAC 数显结果和实际测试音轨的 PCM 格式
 
 #### 必需的 ELF 文件
 
-这些是当前模块直接分析或改写的核心对象，必须从目标设备原路径导出，
-保持原始文件名和完整文件内容：
+这些是当前模块直接分析或改写的核心对象，必须从目标设备原路径导出，保持原始文件名和完整文件内容：
 
 - `libaudiopolicymanagerdefault.so`
 - `libaudiopolicycomponents.so`
@@ -142,53 +116,40 @@ bash scripts/collect_device_port.sh issue --capture-transitions
 - `libaudioclient.so`、`libaudiopolicyservice.so`（如果存在）
 - 当前 USB/PAL 实现，例如 `libdev_usb.so` 或 `libar-pal.so`
 - `libaudioplatformconverter.qti.so`（如果存在）
-- 当前 Qualcomm Audio HAL：`libaudiocorehal.qti.so`、`libaudiocorehal.default.so`
-  或同类 `audio.*` / `android.hardware.audio*` 库
-- 实际注册音频服务的可执行文件，例如 `audiohalservice.qti`，以及
-  `audioserver` 的 `/proc/<pid>/maps` 中出现的音频相关库
+- 当前 Qualcomm Audio HAL：`libaudiocorehal.qti.so`、`libaudiocorehal.default.so` 或同类 `audio.*` / `android.hardware.audio*` 库
+- 实际注册音频服务的可执行文件，例如 `audiohalservice.qti`，以及 `audioserver` 的 `/proc/<pid>/maps` 中出现的音频相关库
 
 #### HIDL 对照所需文件
 
-如果设备仍提供 HIDL，除了上面的通用对象，还要提供实际存在的全部相关
-文件，而不是只给文件名：
+如果设备仍提供 HIDL，除了上面的通用对象，还要提供实际存在的全部相关文件，而不是只给文件名：
 
 - `vendor/lib64/hw/audio.primary*.so`
 - `vendor/lib64/hw/audio.usb*.so`、`audio.bluetooth*.so`
-- `vendor/lib64/hw/android.hardware.audio@*.so`、
-  `android.hardware.audio.effect@*.so`
+- `vendor/lib64/hw/android.hardware.audio@*.so`、`android.hardware.audio.effect@*.so`
 - `vendor/bin/hw/android.hardware.audio@*.service` 或同类 audio HAL 服务
-- 同一服务进程的 `/proc/<pid>/maps`，以及依赖的 Qualcomm `libpal`、`libagm`、
-  `libacdb`、`libqahw`、tinyalsa、平台 converter 和 USB 库
+- 同一服务进程的 `/proc/<pid>/maps`，以及依赖的 Qualcomm `libpal`、`libagm`、`libacdb`、`libqahw`、tinyalsa、平台 converter 和 USB 库
 - HIDL 版本的 VINTF manifest、init RC 和 audio HAL 配置
 
-旧设备还要保留实际服务使用的 ABI：如果 HAL 进程加载 `/vendor/lib/`，请同时
-提供 32 位库；不能只导出同名的 `/vendor/lib64/` 文件。
+旧设备还要保留实际服务使用的 ABI：如果 HAL 进程加载 `/vendor/lib/`，请同时提供 32 位库；不能只导出同名的 `/vendor/lib64/` 文件。
 
 #### 配置和运行状态
 
-- 当前生效的 audio policy/module XML、audio policy engine XML、厂商 audio
-  interface XML，以及相关 SKU/ODM 覆盖文件
+- 当前生效的 audio policy/module XML、audio policy engine XML、厂商 audio interface XML，以及相关 SKU/ODM 覆盖文件
 - audio HAL 的 VINTF manifest 和 init RC
 - `dumpsys media.audio_policy`
 - `dumpsys media.audio_flinger`
-- `/proc/asound/cards`、`/proc/asound/pcm`、相关 `card*/stream*`，以及 USB
-  描述符或 `dumpsys usb`
+- `/proc/asound/cards`、`/proc/asound/pcm`、相关 `card*/stream*`，以及 USB 描述符或 `dumpsys usb`
 - `service list`、音频服务进程列表和 audio 服务的 SELinux 上下文
 
 #### 必需的动态日志
 
-推荐使用 `port --capture-transitions`，在 DAC 已连接时依次测试 44.1、48、
-88.2、96、176.4、192、384 kHz，再回到 44.1 kHz，完全停止播放并拔插 DAC。
-日志要覆盖每个切换前后至少数秒，并同时记录 DAC 数显。
-至少包含 `AudioPolicy`、`AudioFlinger`、AIDL/HIDL HAL、PAL/AGM、ALSA、USB
-和采样率关键字。不要上传 APK、歌曲文件或与音频问题无关的完整 logcat。
+推荐使用 `port --capture-transitions`，在 DAC 已连接时依次测试 44.1、48、88.2、96、176.4、192、384 kHz，再回到 44.1 kHz，完全停止播放并拔插 DAC。日志要覆盖每个切换前后至少数秒，并同时记录 DAC 数显。至少包含 `AudioPolicy`、`AudioFlinger`、AIDL/HIDL HAL、PAL/AGM、ALSA、USB 和采样率关键字。不要上传 APK、歌曲文件或与音频问题无关的完整 logcat。
 
-新设备和新 Android/HAL 基线仍需提供 stock 库以验证语义签名与对象布局；不再
-要求为每个固件手工维护一组裸偏移。旧 HIDL 路径必须按独立 use case 分析。
+新设备和新 Android/HAL 基线仍需提供 stock 库以验证语义签名与对象布局；不再要求为每个固件手工维护一组裸偏移。旧 HIDL 路径必须按独立 use case 分析。
 
 ## English
 
-An adaptive USB DAC sample-rate module for Xiaomi and Redmi devices using the
+An adaptive USB DAC sample-rate Magisk / KernelSU module for Xiaomi and Redmi devices using the
 Qualcomm AIDL audio stack.
 
 The current hardware target is Xiaomi 17 Ultra on Android 17. A specified player
@@ -199,27 +160,28 @@ follow the track between 44.1, 48, 88.2, 96, 176.4, 192 and 384 kHz.
 
 | Model             | Codename   | OS / firmware baseline                       | Validation status                  | Module status                 | Adaptation type                  |
 | ----------------- | ---------- | -------------------------------------------- | ---------------------------------- | ----------------------------- | -------------------------------- |
-| Xiaomi 17 Ultra   | `nezha`    | Android 17 / API 37<br>`OS4.0.0.15.XPACNXM`  | **Hardware verified**              | Installable                   | Native HIFI fix                  |
-| Xiaomi 17 Ultra   | `nezha`    | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)**      | Installable with warning      | Native HIFI port                 |
-| Xiaomi 17         | `pudding`  | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
-| Xiaomi 17 Max     | `byron`    | Android 16 / API 36<br>`OS3.0.308.0.WAFCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
-| Xiaomi 17 Pro     | `pandora`  | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
-| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL HAL port                    |
+| Xiaomi 17 Ultra   | `nezha`    | Android 17 / API 37<br>`OS4.0.0.15 / OS4.0.0.17.XPACNXM`  | **Hardware verified**              | Installable                   | AIDL v3 / native HIFI fix        |
+| Xiaomi 17 Ultra   | `nezha`    | Android 16 / API 36<br>`OS3.0.309.0.WPACNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / native HIFI port       |
+| Xiaomi 17         | `pudding`  | Android 16 / API 36<br>`OS3.0.315.0.WPCCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / HAL port               |
+| Xiaomi 17 Max     | `byron`    | Android 16 / API 36<br>`OS3.0.308.0.WAFCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / HAL port               |
+| Xiaomi 17 Pro     | `pandora`  | Android 16 / API 36<br>`OS3.0.318.0.WBLCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / HAL port               |
+| Xiaomi 17 Pro Max | `popsicle` | Android 16 / API 36<br>`OS3.0.318.0.WPBCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / HAL port               |
 | Redmi K90 Pro Max | `myron`    | Android 16 / API 36<br>`OS3.0.308.0.WPMCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v3 / shifted-layout port    |
 | Xiaomi 15         | `dada`     | Android 16 / API 36<br>`OS3.0.305.0.WOCCNXM` | **Theoretical (offline OTA)**      | Installable with warning      | AIDL v2 / PAL worker migration   |
 
 “Hardware verified” means that the module has been tested on the actual device,
 USB DAC and real playback applications.
 
-“Theoretical” means that the complete OTA package was extracted from the target
-firmware and passed semantic injection, branch relocation and two-pass
-idempotence validation, but no corresponding physical device test was performed.
-
-Theoretical compatibility does not mean confirmed audio stability or strict
-Bit Perfect output.
+“Theoretical” means that the target libraries were extracted from the complete OTA package
+and passed semantic injection, branch relocation, and two-pass idempotence validation (ensuring
+patch state convergence without corrupting ELF structures), but no physical device validation was performed.
 
 When installing a theoretical target, the installer displays a prominent warning.
 Installation continues only after confirmation by pressing either volume key.
+
+> This module supports Magisk, or KernelSU with an active metamodule (such as meta-overlayfs).
+
+Because output routing involves machine-code injection into the native `AudioPolicyManager`, target package names are statically compiled into the binary payload at build time. The module currently targets four players:
 
 Player allowlist:
 
@@ -228,22 +190,11 @@ Player allowlist:
 - QQ Music (`com.tencent.qqmusic`)
 - Spotify (`com.spotify.music`)
 
-The output target is USB Audio.
+Modifications apply strictly to **USB Audio (external USB DAC)**; built-in speakers, Bluetooth, analogue audio, and system mixed routes are not affected by this module.
 
-Root environments:
-- Magisk
-- KernelSU with a valid metamodule
+For unlisted Qualcomm Android 17 devices or subsequent OTA system updates, the installer displays an unverified warning. The module does not simply block installation based on Build ID or hash changes; it dynamically analyzes the instruction signatures, object memory layout, and available patch space of system libraries at install time. Installation proceeds only when all structural safety checks match completely, ensuring compatibility across minor OTA updates while preventing unsafe modifications.
 
-Speaker output, Bluetooth output, analogue headphone output and mixed routes are
-not modified by this module.
-
-Other Qualcomm Android 17 AIDL audio baselines display an unverified warning.
-Continuation is allowed only when ELF architecture, unique code signatures,
-object layouts and executable patch space all match.
-
-Fingerprints, Build IDs and whole-file hashes are used only for diagnostics.
-They do not replace structural validation and do not independently block
-compatible OTA targets.
+> **Warning / Disclaimer**: Because this module modifies low-level audio HAL and system binaries, using it carries inherent risks, including bootloops or audioserver crash loops. Please ensure you have the capability to recover your device. **Use at your own risk**.
 
 ### Features
 
@@ -261,7 +212,8 @@ compatible OTA targets.
 ### Limitations
 
 Output target: the current implementation is based on Xiaomi's remaining native
-HIFI output path, not the Bit Perfect path introduced after Android 14.
+HIFI output path. If other device models have HAL code stripped or modified,
+additional adaptation is required.
 
 Module overwrite upgrades are not supported.
 
@@ -294,10 +246,7 @@ used as write addresses.
 
 An unrecorded Qualcomm device receives a prominent warning before the same
 structural checks run. Zero or multiple matches, unknown layouts and mixed
-patch states abort. All seven Android 16 baselines passed offline injection and
-two-pass idempotence checks against extracted OTA libraries and are enabled
-after acknowledging that hardware validation is missing. None of this
-certifies runtime stability or strict bit-perfect output.
+patch states abort. Several baselines passed offline injection and safety verification against extracted OTA libraries and can be installed after acknowledging that hardware validation is missing.
 
 ### Porting requests
 
