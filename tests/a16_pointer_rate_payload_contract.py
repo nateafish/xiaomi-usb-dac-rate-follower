@@ -67,13 +67,15 @@ def main() -> None:
     assert word(worker, 0x24) == 0xC8DFFD4C  # ldar x12, [x10]
     assert word(worker, 0x28) & 0xFFF8001F == 0xB600000C  # tbz x12, #32
     assert word(worker, 0x2C) == 0xF943F6AB  # cache +0x7e8
-    assert word(worker, 0x40) == 0xF941D2AA  # PAL handle +0x3a0
-    assert word(worker, 0x64) == 0xB900416C  # cached rate +0x40
-    assert word(worker, 0x74) == 0x39400128  # displaced ldrb w8, [x9]
+    assert word(worker, 0x40) == 0xF9000FEA  # preserve mailbox pointer
+    assert word(worker, 0x44) == 0xF941D2AA  # PAL handle +0x3a0
+    assert word(worker, 0x5C) == 0xC8DFFD4C  # refresh rate after standby
+    assert word(worker, 0x68) == 0xB900416C  # cached rate +0x40
+    assert word(worker, 0x78) == 0x39400128  # displaced ldrb w8, [x9]
 
     worker_expected = {
         "PUDDING_WORKER_STANDBY": (80, "BL"),
-        "PUDDING_WORKER_RETURN": (120, "B"),
+        "PUDDING_WORKER_RETURN": (124, "B"),
     }
     for symbol, (offset, kind) in worker_expected.items():
         pattern = rf"^A16_POINTER_RATE_WORKER_{symbol}='{offset}:{kind}'$"

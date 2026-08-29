@@ -49,12 +49,15 @@ def worker(
     cached: int,
     live_handle: bool,
     standby_status: int = 0,
+    configured_after_standby: int | None = None,
 ) -> tuple[int, int]:
     """Return cached rate and standby-call count."""
     if usecase != 3 or configured == cached:
         return cached, 0
     if live_handle and standby_status != 0:
         return cached, 1
+    if live_handle and configured_after_standby is not None:
+        configured = configured_after_standby
     return configured, int(live_handle)
 
 
@@ -116,6 +119,7 @@ def main() -> None:
     assert worker(3, 44_100, 48_000, True) == (44_100, 1)
     assert worker(3, 44_100, 48_000, False) == (44_100, 0)
     assert worker(3, 44_100, 48_000, True, -1) == (48_000, 1)
+    assert worker(3, 96_000, 48_000, True, 0, 44_100) == (44_100, 1)
     assert worker(3, 48_000, 48_000, True) == (48_000, 0)
     assert worker(2, 44_100, 48_000, True) == (48_000, 0)
     print('Dada rate handoff model: PASS')

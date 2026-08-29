@@ -1,7 +1,7 @@
-Xiaomi USB DAC Rate Follower v0.8.5-alpha
+Xiaomi USB DAC Rate Follower v0.8.6-alpha
 
 Experimental module verified on Xiaomi 17 Ultra Android 17 firmware
-OS4.0.0.15.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
+OS4.0.0.15/17.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
 when all semantic ELF and layout checks match, and are reported as unverified.
 
 Supported players:
@@ -18,6 +18,10 @@ Supported output:
 The module uses Xiaomi's native HifiSampleRateManager and contains no daemon,
 polling loop, Zygisk code or application hook. Speaker, Bluetooth, analogue
 and mixed routes are left untouched.
+
+This experimental build publishes the framework-visible target rate on the
+Binder path and moves Android 17 case-3 PAL teardown to the existing audio
+transfer worker. Usecases 8 and 13 retain Xiaomi's stock two-sided mutex.
 
 When the final HIFI track stops, an idle USB DAC keeps the last source rate
 until standby instead of being switched to 48 kHz first. If another ordinary

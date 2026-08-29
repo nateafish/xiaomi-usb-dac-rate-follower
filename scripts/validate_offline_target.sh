@@ -157,12 +157,12 @@ elif [[ ${HAL_PATCH_KIND:-} == nezha-usecase-guard ]]; then
         echo "Android 16 mixed Qualcomm guard state was not rejected" >&2
         exit 1
     fi
-elif [[ $ANDROID_MAJOR == 17 && -n ${QTI_SITE:-} \
+elif [[ $ANDROID_MAJOR == 17 && -n ${QTI_PARAMETER_SITE:-} \
         && -n ${QTI_TRANSFER_SITE:-} ]]; then
     mixed_parameter_hal=$WORK_DIR/work/hal-mixed-a17-parameter.so
     cp -p "$HAL_DEST" "$mixed_parameter_hal"
-    "$ELFPATCHER" branch "$mixed_parameter_hal" "$QTI_SITE" \
-        "$((QTI_SITE + 4))" B
+    "$ELFPATCHER" branch "$mixed_parameter_hal" "$QTI_PARAMETER_SITE" \
+        "$((QTI_PARAMETER_SITE + 4))" B
     if (
         HAL_DEST=$mixed_parameter_hal
         apply_target_patches

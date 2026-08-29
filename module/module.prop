@@ -1,6 +1,6 @@
 id=xiaomi-usb-dac-rate-follower
 name=Xiaomi USB DAC Rate Follower
-version=0.8.5-alpha
-versionCode=37
+version=0.8.6-alpha
+versionCode=39
 author=nateafish
-description=Semantically matched native hifi_playback selection and USB DAC rate following for four selected players. No daemon or Zygisk. Experimental.
+description=Android 17 synchronized Mixer/PAL case-3 rate handoff with stale-target cancellation. No daemon or Zygisk. Alpha.

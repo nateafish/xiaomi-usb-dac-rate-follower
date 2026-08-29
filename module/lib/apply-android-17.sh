@@ -7,10 +7,11 @@
 . "$TARGET_DIR/usecases/mixer-hal-sync.conf"
 . "$TARGET_DIR/usecases/usb-441-rate-table.conf"
 . "$TARGET_DIR/usecases/qti-hifi-reconfigure.conf"
+. "$TARGET_DIR/usecases/qti-lockfree-reconfigure.conf"
 . "$MODPATH/patches/a17_native_hifi_cave.relocations.conf" \
     || abort "! Missing Android 17 native HIFI relocation manifest"
-. "$MODPATH/patches/a17_qti_transfer_lock.relocations.conf" \
-    || abort "! Missing Android 17 transfer-lock relocation manifest"
+. "$MODPATH/patches/a17_lockfree.relocations.conf" \
+    || abort "! Missing Android 17 lock-free relocation manifest"
 . "$MODPATH/lib/elf-runtime.sh"
 
 apply_target_patches() {
@@ -181,47 +182,83 @@ apply_target_patches() {
         abort "! Qualcomm USB rate table is unknown or ambiguous"
     fi
 
-    qti_match=$(ep_find "$HAL_DEST" exec "$QTI_RECONFIG_CONTEXT" \
-        'Qualcomm HIFI PAL reconfiguration block') || abort "! Cannot resolve Qualcomm HIFI block"
-    QTI_SITE=$(offset_add "$qti_match" "$QTI_RECONFIG_SITE_DELTA")
-    if hex_at "$HAL_DEST" "$QTI_SITE" "$QTI_RECONFIG_STOCK"; then
-        $ELFPATCHER replace "$HAL_DEST" "range:$QTI_SITE:16" \
-            "$QTI_RECONFIG_STOCK" 0 "$QTI_RECONFIG_PATCHED" >/dev/null \
-            || abort "! Qualcomm HIFI reconfiguration patch failed"
-    elif ! hex_at "$HAL_DEST" "$QTI_SITE" "$QTI_RECONFIG_PATCHED"; then
-        abort "! Unknown Qualcomm HIFI reconfiguration state"
-    fi
+    parameter_match=$(ep_find "$HAL_DEST" exec \
+        "$QTI_LOCKFREE_PARAMETER_CONTEXT" \
+        'Qualcomm sampling-rate parameter handoff') \
+        || abort "! Cannot resolve Qualcomm parameter handoff"
+    QTI_PARAMETER_SITE=$(offset_add "$parameter_match" \
+        "$QTI_LOCKFREE_PARAMETER_SITE_DELTA")
+    QTI_PARAMETER_STOCK_RESUME=$(offset_add "$QTI_PARAMETER_SITE" \
+        "$QTI_LOCKFREE_PARAMETER_STOCK_RESUME_DELTA")
+    QTI_PARAMETER_SKIP=$(offset_add "$QTI_PARAMETER_SITE" \
+        "$QTI_LOCKFREE_PARAMETER_SKIP_DELTA")
+    branch_points_to "$HAL_DEST" \
+        "$(offset_add "$QTI_PARAMETER_SITE" \
+            "$QTI_LOCKFREE_PARAMETER_EQUAL_BRANCH_DELTA")" \
+        "$QTI_PARAMETER_SKIP" \
+        || abort "! Qualcomm parameter equal-rate target changed"
 
-    transfer_match=$(ep_find "$HAL_DEST" exec "$QTI_TRANSFER_CONTEXT" \
-        'Qualcomm HIFI transfer synchronization block') \
-        || abort "! Cannot resolve Qualcomm HIFI transfer lock"
+    transfer_match=$(ep_find "$HAL_DEST" exec \
+        "$QTI_LOCKFREE_TRANSFER_CONTEXT" \
+        'Qualcomm transfer synchronization block') \
+        || abort "! Cannot resolve Qualcomm transfer synchronization"
     QTI_TRANSFER_SITE=$(offset_add "$transfer_match" \
-        "$QTI_TRANSFER_SITE_DELTA")
-    if hex_at "$HAL_DEST" "$QTI_TRANSFER_SITE" \
-            "$QTI_TRANSFER_STOCK"; then
-        QTI_TRANSFER_SKIP=$(branch_target "$HAL_DEST" \
-            "$(offset_add "$QTI_TRANSFER_SITE" 12)") \
-            || abort "! Cannot resolve stock transfer skip target"
-        branch_points_to "$HAL_DEST" \
-            "$(offset_add "$QTI_TRANSFER_SITE" 4)" \
-            "$(offset_add "$QTI_TRANSFER_SITE" 16)" \
-            || abort "! Qualcomm stock transfer lock entry changed"
+        "$QTI_LOCKFREE_TRANSFER_SITE_DELTA")
+    QTI_TRANSFER_LOCK=$(offset_add "$QTI_TRANSFER_SITE" \
+        "$QTI_LOCKFREE_TRANSFER_LOCK_DELTA")
+    QTI_TRANSFER_SKIP=$(offset_add "$QTI_TRANSFER_SITE" \
+        "$QTI_LOCKFREE_TRANSFER_SKIP_DELTA")
+    branch_points_to "$HAL_DEST" \
+        "$(offset_add "$QTI_TRANSFER_SITE" 4)" "$QTI_TRANSFER_LOCK" \
+        || abort "! Qualcomm stock transfer lock entry changed"
+    branch_points_to "$HAL_DEST" \
+        "$(offset_add "$QTI_TRANSFER_SITE" 12)" "$QTI_TRANSFER_SKIP" \
+        || abort "! Qualcomm stock transfer skip target changed"
+
+    QTI_CFI_CHECK=$(ep_symbol "$HAL_DEST" "$QTI_LOCKFREE_CFI_SYMBOL" \
+        'Qualcomm CFI boundary') || abort "! Cannot resolve Qualcomm CFI boundary"
+    QTI_LOCKFREE_CAVE=$(offset_add "$QTI_CFI_CHECK" \
+        "$QTI_LOCKFREE_CAVE_DELTA")
+    QTI_PARAMETER_CAVE=$(offset_add "$QTI_LOCKFREE_CAVE" \
+        "$A17_LOCKFREE_SYMBOL_A17_LOCKFREE_PARAMETER_HOOK")
+    QTI_TRANSFER_CAVE=$(offset_add "$QTI_LOCKFREE_CAVE" \
+        "$A17_LOCKFREE_SYMBOL_A17_LOCKFREE_TRANSFER_HOOK")
+    QTI_ATOI=$(ep_plt "$HAL_DEST" atoi 'Qualcomm atoi') \
+        || abort "! Cannot resolve Qualcomm atoi"
+    QTI_STANDBY=$(ep_symbol "$HAL_DEST" \
+        "$QTI_LOCKFREE_STANDBY_SYMBOL" 'Xiaomi stream standby') \
+        || abort "! Cannot resolve Xiaomi stream standby"
+
+    $ELFPATCHER inject "$HAL_DEST" "$QTI_LOCKFREE_CAVE" \
+        "$MODPATH/patches/a17_lockfree.template.bin" \
+        "${A17_LOCKFREE_A17_PARAMETER_STOCK_RESUME}:$QTI_PARAMETER_STOCK_RESUME" \
+        "${A17_LOCKFREE_ATOI}:$QTI_ATOI" \
+        "${A17_LOCKFREE_A17_PARAMETER_SKIP_STANDBY}:$QTI_PARAMETER_SKIP" \
+        "${A17_LOCKFREE_A17_TRANSFER_LOCK_ENTRY}:$QTI_TRANSFER_LOCK" \
+        "${A17_LOCKFREE_A17_WORKER_STANDBY}:$QTI_STANDBY" \
+        "${A17_LOCKFREE_A17_TRANSFER_SKIP_LOCK}:$QTI_TRANSFER_SKIP" \
+        || abort "! Qualcomm lock-free cave injection failed"
+
+    if hex_at "$HAL_DEST" "$QTI_PARAMETER_SITE" \
+            "$QTI_LOCKFREE_PARAMETER_STOCK"; then
+        $ELFPATCHER branch "$HAL_DEST" "$QTI_PARAMETER_SITE" \
+            "$QTI_PARAMETER_CAVE" B \
+            || abort "! Qualcomm parameter handoff branch failed"
     else
-        transfer_tbz_word=$($ELFPATCHER word "$HAL_DEST" \
-            "$(offset_add "$QTI_TRANSFER_SITE" 8)") \
-            || abort "! Cannot read patched transfer guard"
-        [ $(( transfer_tbz_word & 0x7f00001f )) -eq \
-                $(( 0x36000009 )) ] \
-            || abort "! Unknown Qualcomm HIFI transfer-lock state"
-        QTI_TRANSFER_SKIP=$(branch_target "$HAL_DEST" \
-            "$(offset_add "$QTI_TRANSFER_SITE" 8)") \
-            || abort "! Cannot resolve patched transfer skip target"
+        branch_points_to "$HAL_DEST" "$QTI_PARAMETER_SITE" \
+            "$QTI_PARAMETER_CAVE" \
+            || abort "! Unknown Qualcomm parameter handoff state"
     fi
-    $ELFPATCHER patch-template "$HAL_DEST" "$QTI_TRANSFER_SITE" \
-        "$QTI_TRANSFER_STOCK" \
-        "$MODPATH/patches/a17_qti_transfer_lock.template.bin" \
-        "${A17_QTI_TRANSFER_HIFI_TRANSFER_SKIP_LOCK}:$QTI_TRANSFER_SKIP" \
-        || abort "! Qualcomm HIFI transfer-lock patch failed"
+    if hex_at "$HAL_DEST" "$QTI_TRANSFER_SITE" \
+            "$QTI_LOCKFREE_TRANSFER_FIRST"; then
+        $ELFPATCHER branch "$HAL_DEST" "$QTI_TRANSFER_SITE" \
+            "$QTI_TRANSFER_CAVE" B \
+            || abort "! Qualcomm transfer handoff branch failed"
+    else
+        branch_points_to "$HAL_DEST" "$QTI_TRANSFER_SITE" \
+            "$QTI_TRANSFER_CAVE" \
+            || abort "! Unknown Qualcomm transfer handoff state"
+    fi
 
     frame_entry=$(ep_find "$HAL_DEST" exec "$QTI_FRAME_ENTRY" \
         'Qualcomm HIFI frame-count function') || abort "! Cannot resolve HIFI frame-count function"
@@ -244,16 +281,12 @@ apply_target_patches() {
         || abort "! MixerThread synchronization verification failed"
     $ELFPATCHER find "$USB_DEST" "$usb_domain" "$USB_RATE_PATCHED" \
         >/dev/null || abort "! Qualcomm USB table verification failed"
-    hex_at "$HAL_DEST" "$QTI_SITE" "$QTI_RECONFIG_PATCHED" \
-        || abort "! Qualcomm HIFI reconfiguration verification failed"
-    transfer_tbz_word=$($ELFPATCHER word "$HAL_DEST" \
-        "$(offset_add "$QTI_TRANSFER_SITE" 8)") \
-        || abort "! Cannot verify Qualcomm HIFI transfer guard"
-    [ $(( transfer_tbz_word & 0x7f00001f )) -eq \
-            $(( 0x36000009 )) ] \
-        && branch_points_to "$HAL_DEST" \
-            "$(offset_add "$QTI_TRANSFER_SITE" 8)" "$QTI_TRANSFER_SKIP" \
-        || abort "! Qualcomm HIFI transfer synchronization verification failed"
+    branch_points_to "$HAL_DEST" "$QTI_PARAMETER_SITE" \
+        "$QTI_PARAMETER_CAVE" \
+        || abort "! Qualcomm parameter handoff verification failed"
+    branch_points_to "$HAL_DEST" "$QTI_TRANSFER_SITE" \
+        "$QTI_TRANSFER_CAVE" \
+        || abort "! Qualcomm transfer handoff verification failed"
     hex_at "$HAL_DEST" "$FRAME_BODY" "$QTI_FRAME_STOCK" \
         || abort "! Qualcomm frame-count verification failed"
 
@@ -261,5 +294,5 @@ apply_target_patches() {
         'USB rate table') || abort "! Cannot resolve Qualcomm USB rate table"
     ui_print "- Dynamic patch map: policy=$SELECT_SITE cave=$CAVE_BASE"
     ui_print "- Dynamic patch map: mixer=$MIXER_SITE USB-table=$USB_TABLE_SITE"
-    ui_print "- Dynamic patch map: Qualcomm-HAL=$QTI_SITE transfer=$QTI_TRANSFER_SITE"
+    ui_print "- Dynamic patch map: Qualcomm-HAL parameter=$QTI_PARAMETER_SITE transfer=$QTI_TRANSFER_SITE cave=$QTI_LOCKFREE_CAVE"
 }

@@ -40,7 +40,8 @@ def main() -> None:
     # Binder -> writer handoff is one aligned optional-rate word using a
     # release store and acquire load, never two independent plain accesses.
     require_once(parameter, bytes.fromhex("49fd9fc8"), "Dada release publication")
-    require_once(worker, bytes.fromhex("4cfddfc8"), "Dada acquire consumption")
+    if worker.count(bytes.fromhex("4cfddfc8")) != 2:
+        raise SystemExit("Dada worker must acquire the mailbox before and after standby")
     print("Dada payload binary contract: PASS")
 
 

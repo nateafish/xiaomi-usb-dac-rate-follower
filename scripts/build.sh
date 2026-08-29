@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.8.5-alpha
+VERSION=0.8.6-alpha
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -77,18 +77,25 @@ python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
     "$BUILD_DIR/hifi_dynamic_default.o"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
-    "$ROOT_DIR/patches/qti_hifi_hal_patches.S" \
-    -o "$BUILD_DIR/qti_hifi_hal_patches.o"
+    "$ROOT_DIR/patches/android-17/qti_lockfree_reconfigure.S" \
+    -o "$BUILD_DIR/a17_lockfree.o"
 python3 "$ROOT_DIR/scripts/generate_relocation_manifest.py" \
     --readelf "$LLVM_BIN/llvm-readelf" \
-    --object "$BUILD_DIR/qti_hifi_hal_patches.o" \
-    --section .rela.hifi_transfer_lock_patch \
-    --prefix A17_QTI_TRANSFER \
-    --output "$BUILD_DIR/a17_qti_transfer_lock.relocations.conf" \
-    --expect HIFI_TRANSFER_SKIP_LOCK=R_AARCH64_TSTBR14
+    --object "$BUILD_DIR/a17_lockfree.o" \
+    --section .rela.a17_lockfree_cave \
+    --prefix A17_LOCKFREE \
+    --output "$BUILD_DIR/a17_lockfree.relocations.conf" \
+    --expect A17_PARAMETER_STOCK_RESUME=R_AARCH64_JUMP26 \
+    --expect ATOI=R_AARCH64_CALL26 \
+    --expect A17_PARAMETER_SKIP_STANDBY=R_AARCH64_JUMP26 \
+    --expect A17_TRANSFER_LOCK_ENTRY=R_AARCH64_JUMP26 \
+    --expect A17_WORKER_STANDBY=R_AARCH64_CALL26 \
+    --expect A17_TRANSFER_SKIP_LOCK=R_AARCH64_JUMP26 \
+    --symbol a17_lockfree_parameter_hook \
+    --symbol a17_lockfree_transfer_hook
 "$LLVM_BIN/llvm-objcopy" \
-    --dump-section .hifi_transfer_lock_patch="$BUILD_DIR/a17_qti_transfer_lock.template.bin" \
-    "$BUILD_DIR/qti_hifi_hal_patches.o"
+    --dump-section .a17_lockfree_cave="$BUILD_DIR/a17_lockfree.template.bin" \
+    "$BUILD_DIR/a17_lockfree.o"
 
 "$CLANG" --target=aarch64-linux-android35 -c \
     "$ROOT_DIR/patches/usb_output_gate.S" -o "$BUILD_DIR/usb_output_gate.o"
@@ -203,7 +210,7 @@ require_size "$BUILD_DIR/hifi_idle_rate_cave.template.bin" 32
 require_size "$BUILD_DIR/hifi_dynamic_default_cave.template.bin" 86
 require_size "$BUILD_DIR/usb_output_gate_cave.template.bin" 140
 require_size "$BUILD_DIR/usb_output_arbitration_cave.template.bin" 292
-require_size "$BUILD_DIR/a17_qti_transfer_lock.template.bin" 16
+require_size "$BUILD_DIR/a17_lockfree.template.bin" 768
 require_size "$BUILD_DIR/a16_native_hifi_route.template.bin" 640
 require_size "$BUILD_DIR/a16_hifi_dynamic_default.template.bin" 86
 require_size "$BUILD_DIR/a16_qti_hifi_reconfigure.template.bin" 16
@@ -226,9 +233,9 @@ python3 "$ROOT_DIR/tests/a16_shifted_pointer_rate_payload_contract.py" \
     "$BUILD_DIR/a16_shifted_pointer_rate.relocations.conf" \
     "$BUILD_DIR/a16_shifted_pointer_rate_worker.template.bin" \
     "$BUILD_DIR/a16_shifted_pointer_rate_worker.relocations.conf"
-python3 "$ROOT_DIR/tests/a17_qti_transfer_lock_contract.py" \
-    "$BUILD_DIR/a17_qti_transfer_lock.template.bin" \
-    "$BUILD_DIR/a17_qti_transfer_lock.relocations.conf"
+python3 "$ROOT_DIR/tests/a17_lockfree_payload_contract.py" \
+    "$BUILD_DIR/a17_lockfree.template.bin" \
+    "$BUILD_DIR/a17_lockfree.relocations.conf"
 grep -a -q hifi_playback "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.apple.android.music "$BUILD_DIR/native_hifi_cave.template.bin"
 grep -a -q com.netease.cloudmusic "$BUILD_DIR/native_hifi_cave.template.bin"
@@ -245,6 +252,7 @@ python3 "$ROOT_DIR/tests/hifi_dynamic_default_model.py"
 python3 "$ROOT_DIR/tests/hifi_idle_rate_model.py"
 python3 "$ROOT_DIR/tests/dada_rate_handoff_model.py"
 python3 "$ROOT_DIR/tests/a16_pointer_rate_handoff_model.py"
+python3 "$ROOT_DIR/tests/a17_lockfree_reconfigure_model.py"
 bash "$ROOT_DIR/tests/fresh_install_state_model.sh"
 bash "$ROOT_DIR/tests/theoretical_confirmation_model.sh"
 bash "$ROOT_DIR/tests/android16_target_selection_model.sh"
@@ -274,7 +282,7 @@ cp "$BUILD_DIR/elfpatcher" "$MODULE_STAGE/bin/elfpatcher"
 cp -a "$ROOT_DIR/targets" "$MODULE_STAGE/targets"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.8.5-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.8.6-alpha$' "$MODULE_STAGE/module.prop"
 grep -q '^TARGET_INSTALLABLE=1$' \
     "$MODULE_STAGE/targets/android-16/target.conf"
 grep -q '^TARGET_VALIDATION_TYPE=theoretical$' \

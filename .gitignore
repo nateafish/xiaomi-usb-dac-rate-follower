@@ -5,3 +5,4 @@
 *.class
 *.jar
 .DS_Store
+/device_dump/

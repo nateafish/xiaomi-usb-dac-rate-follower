@@ -113,13 +113,14 @@ a16_dada_rate_worker:
     cmp     w8, w12
     b.eq    .Lworker_resume
 
+    str     x10, [sp, #0x8]
     ldr     x10, [x23, #0x3c0]
     cbz     x10, .Lworker_commit
-    str     w12, [sp, #0x8]
     mov     x0, x23
     bl      DADA_STANDBY
     cbnz    w0, .Lworker_resume
-    ldr     w12, [sp, #0x8]
+    ldr     x10, [sp, #0x8]
+    ldar    x12, [x10]
     ldr     x11, [x23, #0x540]
     cbz     x11, .Lworker_resume
 

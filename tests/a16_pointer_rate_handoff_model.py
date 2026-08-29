@@ -20,13 +20,15 @@ class Stream:
         if self.usecase == 3 and rate in VALID_RATES:
             self.requested = rate
 
-    def transfer(self, standby_status: int = 0) -> None:
+    def transfer(self, standby_status: int = 0, rate_during_standby: int | None = None) -> None:
         if self.usecase == 3 and self.requested != self.cached:
             if self.live:
                 self.standby_calls += 1
                 if standby_status != 0:
                     return
                 self.live = False
+                if rate_during_standby is not None:
+                    self.parameter(rate_during_standby)
             self.cached = self.requested
         # The ordinary stock branch configures a null handle immediately.
         # hyperWrite is a pacing path and defers reopening until its first
@@ -55,6 +57,12 @@ def main() -> None:
     failed.transfer(-1)
     assert (failed.requested, failed.cached, failed.live) == (192_000, 48_000, True)
     assert (failed.standby_calls, failed.configure_calls) == (1, 0)
+
+    raced = Stream(3, 48_000, True)
+    raced.parameter(96_000)
+    raced.transfer(rate_during_standby=44_100)
+    assert (raced.requested, raced.cached, raced.live) == (44_100, 44_100, True)
+    assert (raced.standby_calls, raced.configure_calls) == (1, 1)
 
     hyper = Stream(3, 48_000, True, hyper=True)
     hyper.parameter(88_200)
