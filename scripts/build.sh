@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=0.8.6-alpha
+VERSION=0.8.6
 OUTPUT_NAME="xiaomi-usb-dac-rate-follower-v${VERSION}.zip"
 
 find_clang() {
@@ -282,7 +282,7 @@ cp "$BUILD_DIR/elfpatcher" "$MODULE_STAGE/bin/elfpatcher"
 cp -a "$ROOT_DIR/targets" "$MODULE_STAGE/targets"
 
 grep -q '^author=nateafish$' "$MODULE_STAGE/module.prop"
-grep -q '^version=0.8.6-alpha$' "$MODULE_STAGE/module.prop"
+grep -q '^version=0.8.6$' "$MODULE_STAGE/module.prop"
 grep -q '^TARGET_INSTALLABLE=1$' \
     "$MODULE_STAGE/targets/android-16/target.conf"
 grep -q '^TARGET_VALIDATION_TYPE=theoretical$' \

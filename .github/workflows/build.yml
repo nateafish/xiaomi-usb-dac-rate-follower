@@ -69,6 +69,5 @@ jobs:
               "dist/${MODULE_ARTIFACT}.zip#Magisk and KernelSU module" \
               "dist/${MODULE_ARTIFACT}.zip.sha256#SHA-256 checksum" \
               --title "Xiaomi USB DAC Rate Follower v${MODULE_VERSION}" \
-              --prerelease \
               --generate-notes
           fi

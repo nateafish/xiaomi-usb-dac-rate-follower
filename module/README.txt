@@ -1,6 +1,6 @@
-Xiaomi USB DAC Rate Follower v0.8.6-alpha
+Xiaomi USB DAC Rate Follower v0.8.6
 
-Experimental module verified on Xiaomi 17 Ultra Android 17 firmware
+Module verified on Xiaomi 17 Ultra Android 17 firmware
 OS4.0.0.15/17.XPACNXM. Other Qualcomm Android 17 AIDL baselines are allowed only
 when all semantic ELF and layout checks match, and are reported as unverified.
 
@@ -19,7 +19,7 @@ The module uses Xiaomi's native HifiSampleRateManager and contains no daemon,
 polling loop, Zygisk code or application hook. Speaker, Bluetooth, analogue
 and mixed routes are left untouched.
 
-This experimental build publishes the framework-visible target rate on the
+This release publishes the framework-visible target rate on the
 Binder path and moves Android 17 case-3 PAL teardown to the existing audio
 transfer worker. Usecases 8 and 13 retain Xiaomi's stock two-sided mutex.
 
@@ -40,8 +40,8 @@ stock audio worker thread. Redmi K90 Pro Max (`myron`) uses an independently
 matched +0x28 private-member layout; no recorded research offset is trusted as
 an installation address.
 
-In-place upgrades are intentionally unsupported during the private alpha
-phase. Delete the installed module and reboot before installing another build.
+In-place upgrades are intentionally unsupported. Delete the installed module
+and reboot before installing another build.
 The installer accepts only the unmodified live system view; full stock
 libraries are not stored in this module.
 

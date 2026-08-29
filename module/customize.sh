@@ -151,4 +151,4 @@ ui_print "- Matching: Android/SoC/HAL baseline plus unique semantic ELF signatur
 ui_print "- Injection: runtime AArch64 relocation; no fixed file offsets"
 ui_print "- Bluetooth, speaker, mixed, empty and stale routes fail closed"
 ui_print "- No daemon, polling loop, Zygisk or application hook"
-ui_print "! Experimental alpha; reboot is required"
+ui_print "! Reboot is required"

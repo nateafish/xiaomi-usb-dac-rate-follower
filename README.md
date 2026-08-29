@@ -54,7 +54,7 @@ AIDL 音频基线会显示未验证警告，并且只有在 ELF 架构、唯一�
 输出目标：当前实现基于小米原有残留的 Hifi 输出通道，
 而非安卓 14 后提供的 Bit Perfect 通道。
 
-Alpha 阶段不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；
+不支持模块覆盖升级。安装其他构建前必须删除现有模块并重启；
 安装器检测到同 ID 的活动或残留模块目录时会直接中止。
 
 模块在安装中注入系统 SO 修改，不保存整套 stock SO。
@@ -263,7 +263,7 @@ compatible OTA targets.
 Output target: the current implementation is based on Xiaomi's remaining native
 HIFI output path, not the Bit Perfect path introduced after Android 14.
 
-During the Alpha stage, module overwrite upgrades are not supported.
+Module overwrite upgrades are not supported.
 
 Before installing another build, the existing module must be removed and the
 device must be rebooted.

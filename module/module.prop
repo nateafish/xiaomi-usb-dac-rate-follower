@@ -1,6 +1,6 @@
 id=xiaomi-usb-dac-rate-follower
 name=Xiaomi USB DAC Rate Follower
-version=0.8.6-alpha
-versionCode=39
+version=0.8.6
+versionCode=40
 author=nateafish
-description=Android 17 synchronized Mixer/PAL case-3 rate handoff with stale-target cancellation. No daemon or Zygisk. Alpha.
+description=Android 17 synchronized Mixer/PAL case-3 rate handoff with stale-target cancellation. No daemon or Zygisk.
